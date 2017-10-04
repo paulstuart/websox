@@ -1,0 +1,11 @@
+---
+applications:
+- name: websox-test        
+  memory: 64M
+  disk_quota: 32M
+  instances: 1
+  timeout: 80
+  command: ./server
+  buildpack: https://github.com/cloudfoundry/binary-buildpack.git
+  env:
+    color: green
