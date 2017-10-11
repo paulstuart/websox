@@ -10,12 +10,15 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"strings"
 	"time"
 
 	"github.com/gorilla/websocket"
 )
 
-var addr = flag.String("addr", "localhost:8080", "http service address")
+var (
+	addr = flag.String("addr", "localhost:8080", "http service address")
+)
 
 func main() {
 	flag.Parse()
@@ -25,6 +28,9 @@ func main() {
 	signal.Notify(interrupt, os.Interrupt)
 
 	u := url.URL{Scheme: "ws", Host: *addr, Path: "/echo"}
+	if strings.HasSuffix(*addr, "443") {
+		u.Scheme += "s"
+	}
 	log.Printf("connecting to %s", u.String())
 
 	c, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
@@ -54,9 +60,10 @@ func main() {
 	for {
 		select {
 		case t := <-ticker.C:
-			err := c.WriteMessage(websocket.TextMessage, []byte(t.String()))
-			if err != nil {
-				log.Println("write:", err)
+			msg := []byte("it has been " + t.String())
+			//if err := c.WriteMessage(websocket.TextMessage, []byte(t.String())); err != nil {
+			if err := c.WriteMessage(websocket.TextMessage, msg); err != nil {
+				log.Println("write error:", err)
 				return
 			}
 		case <-interrupt:
