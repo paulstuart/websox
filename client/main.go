@@ -7,7 +7,9 @@ package main
 import (
 	"encoding/json"
 	"flag"
+	"fmt"
 	"log"
+	"net/http"
 	"net/url"
 	"os"
 	"os/signal"
@@ -36,7 +38,16 @@ func main() {
 	}
 	log.Printf("connecting to %s", u.String())
 
-	c, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
+	/*
+		dialer := websocket.Dialer{
+			 Proxy: http.ProxyFromEnvironment,
+
+		}
+	*/
+	requestHeader := http.Header{}
+	requestHeader.Add("Origin", u.String())
+
+	c, _, err := websocket.DefaultDialer.Dial(u.String(), requestHeader)
 	if err != nil {
 		log.Fatal("dial:", err)
 	}
@@ -60,21 +71,50 @@ func main() {
 			}
 			//log.Printf("recv: %s", message)
 			log.Printf("recv: %-v", s)
+			three := s.Count%3 == 0
+			five := s.Count%5 == 0
+			//fmt.Printf("CNT:%d 3:%d 5:%d\n", s.Count, s.Count%3, s.Count%5)
+			var msg string
+			switch {
+			case three && five:
+				msg = "fizzbuzz"
+			case three:
+				msg = "fizz"
+			case five:
+				msg = "fizzbuzz"
+			}
+			status := websox.Status{
+				Msg: msg,
+				Ok:  len(msg) == 0,
+			}
+			b, err := json.Marshal(status)
+			if err != nil {
+				fmt.Println("status json error:", err)
+				continue
+			}
+
+			if err := c.WriteMessage(websocket.TextMessage, b); err != nil {
+				log.Println("status write error:", err)
+				return
+			}
 		}
 	}()
 
-	ticker := time.NewTicker(time.Second)
+	ticker := time.NewTicker(time.Second * 60)
 	defer ticker.Stop()
 
 	for {
 		select {
 		case t := <-ticker.C:
-			msg := []byte("it has been " + t.String())
-			//if err := c.WriteMessage(websocket.TextMessage, []byte(t.String())); err != nil {
-			if err := c.WriteMessage(websocket.TextMessage, msg); err != nil {
-				log.Println("write error:", err)
-				return
-			}
+			log.Println("TICK:", t)
+			/*
+				msg := []byte("it has been " + t.String())
+				//if err := c.WriteMessage(websocket.TextMessage, []byte(t.String())); err != nil {
+				if err := c.WriteMessage(websocket.TextMessage, msg); err != nil {
+					log.Println("write error:", err)
+					return
+				}
+			*/
 		case <-interrupt:
 			log.Println("interrupt")
 			// To cleanly close a connection, a client should send a close

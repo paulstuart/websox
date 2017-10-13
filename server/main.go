@@ -20,7 +20,7 @@ import (
 
 var (
 	port         = os.Getenv("PORT")
-	addr         = flag.String("addr", ":"+port, "http service address")
+	addr         *string
 	ssl          = flag.Bool("ssl", false, "ssl terminated")
 	upgrader     = websocket.Upgrader{} // use default options
 	homeTemplate *template.Template
@@ -30,6 +30,10 @@ var (
 )
 
 func init() {
+	if len(port) == 0 {
+		port = "8080"
+	}
+	addr = flag.String("addr", ":"+port, "http service address")
 	var err error
 	homeTemplate, err = template.ParseFiles("index.html")
 	if err != nil {
@@ -38,6 +42,7 @@ func init() {
 }
 
 func echo(w http.ResponseWriter, r *http.Request) {
+	fmt.Printf("echo origin:%s host:%s\n", r.Header.Get("Origin"), r.Host)
 	c, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Print("upgrade:", err)
@@ -60,6 +65,13 @@ func echo(w http.ResponseWriter, r *http.Request) {
 }
 
 func push(w http.ResponseWriter, r *http.Request) {
+	fmt.Printf("push origin:%s host:%s\n", r.Header.Get("Origin"), r.Host)
+	/*
+		if r.Header.Get("Origin") != "http://"+r.Host {
+			http.Error(w, "Origin not allowed", 403)
+			return
+		}
+	*/
 	c, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Print("push upgrade error:", err)
@@ -68,14 +80,31 @@ func push(w http.ResponseWriter, r *http.Request) {
 	defer c.Close()
 	for {
 		stuff := websox.FakeStuff()
-		if b, err := json.Marshal(stuff); err != nil {
-			log.Println("json error:", err)
+		b, err := json.Marshal(stuff)
+		if err != nil {
+			log.Println("stuff json error:", err)
 			continue
-		} else {
-			if err = c.WriteMessage(websocket.TextMessage, b); err != nil {
-				log.Println("push write error:", err)
-				break
-			}
+		}
+
+		if err = c.WriteMessage(websocket.TextMessage, b); err != nil {
+			log.Println("push write error:", err)
+			break
+		}
+
+		_, message, err := c.ReadMessage()
+		if err != nil {
+			log.Println("push read error:", err)
+			break
+		}
+		var status websox.Status
+		fmt.Println("STATUS:", string(message))
+		if err := json.Unmarshal(message, &status); err != nil {
+			log.Println("status json error:", err)
+			continue
+		}
+
+		if !status.Ok {
+			fmt.Println("crap:", status.Msg)
 		}
 
 		time.Sleep(time.Second * 1)
