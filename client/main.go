@@ -5,6 +5,7 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"log"
 	"net/url"
@@ -14,6 +15,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/paulstuart/websox"
 )
 
 var (
@@ -27,7 +29,8 @@ func main() {
 	interrupt := make(chan os.Signal, 1)
 	signal.Notify(interrupt, os.Interrupt)
 
-	u := url.URL{Scheme: "ws", Host: *addr, Path: "/echo"}
+	//u := url.URL{Scheme: "ws", Host: *addr, Path: "/echo"}
+	u := url.URL{Scheme: "ws", Host: *addr, Path: "/push"}
 	if strings.HasSuffix(*addr, "443") {
 		u.Scheme += "s"
 	}
@@ -50,7 +53,13 @@ func main() {
 				log.Println("read:", err)
 				return
 			}
-			log.Printf("recv: %s", message)
+			var s websox.Stuff
+			if err := json.Unmarshal(message, &s); err != nil {
+				log.Println("json error:", err)
+				continue
+			}
+			//log.Printf("recv: %s", message)
+			log.Printf("recv: %-v", s)
 		}
 	}()
 

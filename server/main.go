@@ -5,14 +5,17 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"html/template"
 	"log"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/paulstuart/websox"
 )
 
 var (
@@ -22,6 +25,7 @@ var (
 	upgrader     = websocket.Upgrader{} // use default options
 	homeTemplate *template.Template
 	wsProto      = "ws"
+
 	//homeTemplate = template.Must(template.New("").ParseFiles("index.html"))
 )
 
@@ -55,7 +59,36 @@ func echo(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func push(w http.ResponseWriter, r *http.Request) {
+	c, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		log.Print("push upgrade error:", err)
+		return
+	}
+	defer c.Close()
+	for {
+		stuff := websox.FakeStuff()
+		if b, err := json.Marshal(stuff); err != nil {
+			log.Println("json error:", err)
+			continue
+		} else {
+			if err = c.WriteMessage(websocket.TextMessage, b); err != nil {
+				log.Println("push write error:", err)
+				break
+			}
+		}
+
+		time.Sleep(time.Second * 1)
+	}
+}
+
 func home(w http.ResponseWriter, r *http.Request) {
+	if err := homeTemplate.Execute(w, wsProto+"://"+r.Host+"/echo"); err != nil {
+		fmt.Println("home error:", err)
+	}
+}
+
+func pusher(w http.ResponseWriter, r *http.Request) {
 	if err := homeTemplate.Execute(w, wsProto+"://"+r.Host+"/echo"); err != nil {
 		fmt.Println("home error:", err)
 	}
@@ -67,6 +100,9 @@ func main() {
 		wsProto += "s"
 	}
 	log.SetFlags(0)
+
+	http.HandleFunc("/pusher", pusher)
+	http.HandleFunc("/push", push)
 	http.HandleFunc("/echo", echo)
 	http.HandleFunc("/", home)
 	http.HandleFunc("/ok", home)
