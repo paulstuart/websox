@@ -8,8 +8,10 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"math/rand"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/gorilla/websocket"
 	"github.com/paulstuart/websox"
@@ -48,7 +50,7 @@ func main() {
 	log.Fatal(http.ListenAndServe(*addr, nil))
 }
 
-func fakeloop() (chan interface{}, chan error) {
+func fakeLoop() (chan interface{}, chan error) {
 	var i int
 
 	getter := make(chan interface{})
@@ -57,17 +59,17 @@ func fakeloop() (chan interface{}, chan error) {
 	go func() {
 		for {
 			i++
-			getter <- websox.stuff{
-				msg:   fmt.sprintf("msg number: %d", i),
-				count: i,
-				ts:    time.now(),
+			getter <- websox.Stuff{
+				Msg:   fmt.Sprintf("msg number: %d", i),
+				Count: i,
+				TS:    time.Now(),
 			}
 			err := <-teller
 			if err != nil {
-				fmt.println("fakeloop got error:", err)
+				fmt.Println("fakeloop got error:", err)
 			}
-			delay := rand.intn(5)
-			time.sleep(time.second * time.duration(delay))
+			delay := rand.Intn(5)
+			time.Sleep(time.Second * time.Duration(delay))
 		}
 	}()
 
