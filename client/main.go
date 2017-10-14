@@ -1,4 +1,4 @@
-// Copyright 2015 The Gorilla WebSocket Authors. All rights reserved.
+// Copyright 2017 Paul Stuart
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -9,13 +9,9 @@ import (
 	"flag"
 	"fmt"
 	"log"
-	"net/http"
 	"net/url"
-	"os"
-	"os/signal"
 	"strings"
 
-	"github.com/gorilla/websocket"
 	"github.com/paulstuart/websox"
 )
 
@@ -31,64 +27,10 @@ func main() {
 	if strings.HasSuffix(*addr, "443") {
 		u.Scheme += "s"
 	}
-	Client(u.String(), gotIt)
+	websox.Client(u.String(), gotIt)
 }
 
 // Actionable functions act on a received websocket message and return an error if they failed
-type Actionable func([]byte) error
-
-// Client will connect to url and apply the Actionable function to each message recieved
-func Client(url string, fn Actionable) {
-	log.Printf("connecting to %s", url)
-
-	requestHeader := http.Header{}
-	requestHeader.Add("Origin", url)
-
-	c, _, err := websocket.DefaultDialer.Dial(url, requestHeader)
-	if err != nil {
-		log.Fatal("dial:", err)
-	}
-	defer c.Close()
-
-	interrupt := make(chan os.Signal, 1)
-	signal.Notify(interrupt, os.Interrupt)
-
-	go func() {
-		what := <-interrupt
-		log.Println("interrupt:", what)
-
-		// To cleanly close a connection, a client should send a close
-		// frame and wait for the server to close the connection.
-		err := c.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
-		if err != nil {
-			log.Println("websocket close error:", err)
-		}
-	}()
-
-	for {
-		_, message, err := c.ReadMessage()
-		if err != nil {
-			log.Println("websocket read error:", err)
-			return
-		}
-		var status websox.ErrMsg
-		if err = fn(message); err != nil {
-			status.Msg = err.Error()
-		}
-
-		b, err := json.Marshal(status)
-		if err != nil {
-			fmt.Println("status json error:", err)
-			continue
-		}
-
-		if err := c.WriteMessage(websocket.TextMessage, b); err != nil {
-			log.Println("status write error:", err)
-			return
-		}
-	}
-}
-
 var cnt int
 
 func gotIt(message []byte) error {
@@ -106,7 +48,7 @@ func gotIt(message []byte) error {
 	case three:
 		return fmt.Errorf("fizz")
 	case five:
-		return fmt.Errorf("fizzbuzz")
+		return fmt.Errorf("buzz")
 	}
 	return nil
 }
