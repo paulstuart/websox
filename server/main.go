@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"html/template"
 	"log"
 	"net/http"
 	"os"
@@ -19,14 +18,11 @@ import (
 )
 
 var (
-	port         = os.Getenv("PORT")
-	addr         *string
-	ssl          = flag.Bool("ssl", false, "ssl terminated")
-	upgrader     = websocket.Upgrader{} // use default options
-	homeTemplate *template.Template
-	wsProto      = "ws"
-
-	//homeTemplate = template.Must(template.New("").ParseFiles("index.html"))
+	port     = os.Getenv("PORT")
+	addr     *string
+	ssl      = flag.Bool("ssl", false, "ssl terminated")
+	upgrader = websocket.Upgrader{} // use default options
+	wsProto  = "ws"
 )
 
 func init() {
@@ -34,34 +30,6 @@ func init() {
 		port = "8080"
 	}
 	addr = flag.String("addr", ":"+port, "http service address")
-	var err error
-	homeTemplate, err = template.ParseFiles("index.html")
-	if err != nil {
-		panic(err)
-	}
-}
-
-func echo(w http.ResponseWriter, r *http.Request) {
-	fmt.Printf("echo origin:%s host:%s\n", r.Header.Get("Origin"), r.Host)
-	c, err := upgrader.Upgrade(w, r, nil)
-	if err != nil {
-		log.Print("upgrade:", err)
-		return
-	}
-	defer c.Close()
-	for {
-		mt, message, err := c.ReadMessage()
-		if err != nil {
-			log.Println("read:", err)
-			break
-		}
-		log.Printf("recv: %s", message)
-		err = c.WriteMessage(mt, message)
-		if err != nil {
-			log.Println("write:", err)
-			break
-		}
-	}
 }
 
 func push(w http.ResponseWriter, r *http.Request) {
@@ -96,15 +64,14 @@ func push(w http.ResponseWriter, r *http.Request) {
 			log.Println("push read error:", err)
 			break
 		}
-		var status websox.Status
+		var status websox.ErrMsg
 		fmt.Println("STATUS:", string(message))
 		if err := json.Unmarshal(message, &status); err != nil {
 			log.Println("status json error:", err)
 			continue
 		}
-
-		if !status.Ok {
-			fmt.Println("crap:", status.Msg)
+		if err = status.Error(); err != nil {
+			fmt.Println("crap:", err)
 		}
 
 		time.Sleep(time.Second * 1)
@@ -112,15 +79,7 @@ func push(w http.ResponseWriter, r *http.Request) {
 }
 
 func home(w http.ResponseWriter, r *http.Request) {
-	if err := homeTemplate.Execute(w, wsProto+"://"+r.Host+"/echo"); err != nil {
-		fmt.Println("home error:", err)
-	}
-}
-
-func pusher(w http.ResponseWriter, r *http.Request) {
-	if err := homeTemplate.Execute(w, wsProto+"://"+r.Host+"/echo"); err != nil {
-		fmt.Println("home error:", err)
-	}
+	fmt.Fprintln(w, "hello")
 }
 
 func main() {
@@ -130,11 +89,9 @@ func main() {
 	}
 	log.SetFlags(0)
 
-	http.HandleFunc("/pusher", pusher)
 	http.HandleFunc("/push", push)
-	http.HandleFunc("/echo", echo)
 	http.HandleFunc("/", home)
-	http.HandleFunc("/ok", home)
+
 	fmt.Println("listening on:", *addr)
 	log.Fatal(http.ListenAndServe(*addr, nil))
 }

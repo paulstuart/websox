@@ -14,7 +14,6 @@ import (
 	"os"
 	"os/signal"
 	"strings"
-	"time"
 
 	"github.com/gorilla/websocket"
 	"github.com/paulstuart/websox"
@@ -28,108 +27,86 @@ func main() {
 	flag.Parse()
 	log.SetFlags(0)
 
-	interrupt := make(chan os.Signal, 1)
-	signal.Notify(interrupt, os.Interrupt)
-
-	//u := url.URL{Scheme: "ws", Host: *addr, Path: "/echo"}
 	u := url.URL{Scheme: "ws", Host: *addr, Path: "/push"}
 	if strings.HasSuffix(*addr, "443") {
 		u.Scheme += "s"
 	}
-	log.Printf("connecting to %s", u.String())
+	Client(u.String(), gotIt)
+}
 
-	/*
-		dialer := websocket.Dialer{
-			 Proxy: http.ProxyFromEnvironment,
+// Actionable functions act on a received websocket message and return an error if they failed
+type Actionable func([]byte) error
 
-		}
-	*/
+// Client will connect to url and apply the Actionable function to each message recieved
+func Client(url string, fn Actionable) {
+	log.Printf("connecting to %s", url)
+
 	requestHeader := http.Header{}
-	requestHeader.Add("Origin", u.String())
+	requestHeader.Add("Origin", url)
 
-	c, _, err := websocket.DefaultDialer.Dial(u.String(), requestHeader)
+	c, _, err := websocket.DefaultDialer.Dial(url, requestHeader)
 	if err != nil {
 		log.Fatal("dial:", err)
 	}
 	defer c.Close()
 
-	done := make(chan struct{})
+	interrupt := make(chan os.Signal, 1)
+	signal.Notify(interrupt, os.Interrupt)
 
 	go func() {
-		defer c.Close()
-		defer close(done)
-		for {
-			_, message, err := c.ReadMessage()
-			if err != nil {
-				log.Println("read:", err)
-				return
-			}
-			var s websox.Stuff
-			if err := json.Unmarshal(message, &s); err != nil {
-				log.Println("json error:", err)
-				continue
-			}
-			//log.Printf("recv: %s", message)
-			log.Printf("recv: %-v", s)
-			three := s.Count%3 == 0
-			five := s.Count%5 == 0
-			//fmt.Printf("CNT:%d 3:%d 5:%d\n", s.Count, s.Count%3, s.Count%5)
-			var msg string
-			switch {
-			case three && five:
-				msg = "fizzbuzz"
-			case three:
-				msg = "fizz"
-			case five:
-				msg = "fizzbuzz"
-			}
-			status := websox.Status{
-				Msg: msg,
-				Ok:  len(msg) == 0,
-			}
-			b, err := json.Marshal(status)
-			if err != nil {
-				fmt.Println("status json error:", err)
-				continue
-			}
+		what := <-interrupt
+		log.Println("interrupt:", what)
 
-			if err := c.WriteMessage(websocket.TextMessage, b); err != nil {
-				log.Println("status write error:", err)
-				return
-			}
+		// To cleanly close a connection, a client should send a close
+		// frame and wait for the server to close the connection.
+		err := c.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
+		if err != nil {
+			log.Println("websocket close error:", err)
 		}
 	}()
 
-	ticker := time.NewTicker(time.Second * 60)
-	defer ticker.Stop()
-
 	for {
-		select {
-		case t := <-ticker.C:
-			log.Println("TICK:", t)
-			/*
-				msg := []byte("it has been " + t.String())
-				//if err := c.WriteMessage(websocket.TextMessage, []byte(t.String())); err != nil {
-				if err := c.WriteMessage(websocket.TextMessage, msg); err != nil {
-					log.Println("write error:", err)
-					return
-				}
-			*/
-		case <-interrupt:
-			log.Println("interrupt")
-			// To cleanly close a connection, a client should send a close
-			// frame and wait for the server to close the connection.
-			err := c.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
-			if err != nil {
-				log.Println("write close:", err)
-				return
-			}
-			select {
-			case <-done:
-			case <-time.After(time.Second):
-			}
-			c.Close()
+		_, message, err := c.ReadMessage()
+		if err != nil {
+			log.Println("websocket read error:", err)
+			return
+		}
+		var status websox.ErrMsg
+		if err = fn(message); err != nil {
+			status.Msg = err.Error()
+		}
+
+		b, err := json.Marshal(status)
+		if err != nil {
+			fmt.Println("status json error:", err)
+			continue
+		}
+
+		if err := c.WriteMessage(websocket.TextMessage, b); err != nil {
+			log.Println("status write error:", err)
 			return
 		}
 	}
+}
+
+var cnt int
+
+func gotIt(message []byte) error {
+	cnt++
+	fmt.Println("recv cnt:", cnt)
+	var s websox.Stuff
+	if err := json.Unmarshal(message, &s); err != nil {
+		return err
+	}
+	three := s.Count%3 == 0
+	five := s.Count%5 == 0
+	switch {
+	case three && five:
+		return fmt.Errorf("fizzbuzz")
+	case three:
+		return fmt.Errorf("fizz")
+	case five:
+		return fmt.Errorf("fizzbuzz")
+	}
+	return nil
 }
