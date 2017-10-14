@@ -13,16 +13,12 @@ import (
 	"os"
 	"time"
 
-	"github.com/gorilla/websocket"
 	"github.com/paulstuart/websox"
 )
 
 var (
-	port     = os.Getenv("PORT")
-	addr     *string
-	ssl      = flag.Bool("ssl", false, "ssl terminated")
-	upgrader = websocket.Upgrader{} // use default options
-	wsProto  = "ws"
+	port = os.Getenv("PORT")
+	addr *string
 )
 
 func init() {
@@ -38,11 +34,9 @@ func home(w http.ResponseWriter, r *http.Request) {
 
 func main() {
 	flag.Parse()
-	if *ssl {
-		wsProto += "s"
-	}
 	log.SetFlags(0)
 
+	fmt.Println("setting up http handlers")
 	http.HandleFunc("/push", websox.Pusher(fakeLoop))
 	http.HandleFunc("/", home)
 

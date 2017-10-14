@@ -36,8 +36,8 @@ type Admin func() (chan interface{}, chan error)
 // Pusher will apply Admin functionality to a websocket server connection
 func Pusher(admin Admin) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		getter, teller := admin()
 		fmt.Printf("pusher origin:%s host:%s\n", r.Header.Get("Origin"), r.Host)
+		getter, teller := admin()
 		upgrader := websocket.Upgrader{} // use default options
 		c, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
@@ -86,10 +86,14 @@ type Actionable func([]byte) error
 func Client(url string, fn Actionable) {
 	log.Printf("connecting to %s", url)
 
-	requestHeader := http.Header{}
-	requestHeader.Add("Origin", url)
+	/*
+		// TODO: add outh2 security
+		requestHeader := http.Header{}
+		requestHeader.Add("Origin", url)
+		c, _, err := websocket.DefaultDialer.Dial(url, requestHeader)
+	*/
 
-	c, _, err := websocket.DefaultDialer.Dial(url, requestHeader)
+	c, _, err := websocket.DefaultDialer.Dial(url, nil)
 	if err != nil {
 		log.Fatal("dial:", err)
 	}

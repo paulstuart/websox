@@ -1,7 +1,7 @@
 ---
 applications:
 - name: websox-test        
-  memory: 64M
+  memory: 32M
   disk_quota: 32M
   instances: 1
   timeout: 80
