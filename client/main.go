@@ -30,7 +30,6 @@ func main() {
 	websox.Client(u.String(), gotIt)
 }
 
-// Actionable functions act on a received websocket message and return an error if they failed
 var cnt int
 
 func gotIt(message []byte) error {

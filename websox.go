@@ -86,12 +86,7 @@ type Actionable func([]byte) error
 func Client(url string, fn Actionable) {
 	log.Printf("connecting to %s", url)
 
-	/*
-		// TODO: add outh2 security
-		requestHeader := http.Header{}
-		requestHeader.Add("Origin", url)
-		c, _, err := websocket.DefaultDialer.Dial(url, requestHeader)
-	*/
+	// TODO: add outh2 security
 
 	c, _, err := websocket.DefaultDialer.Dial(url, nil)
 	if err != nil {
@@ -120,6 +115,7 @@ func Client(url string, fn Actionable) {
 			log.Println("websocket read error:", err)
 			return
 		}
+
 		var status ErrMsg
 		if err = fn(message); err != nil {
 			status.Msg = err.Error()
