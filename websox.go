@@ -86,7 +86,7 @@ type Actionable func([]byte) error
 func Client(url string, fn Actionable) {
 	log.Printf("connecting to %s", url)
 
-	// TODO: add outh2 security
+	// TODO: add oauth2 security
 
 	c, _, err := websocket.DefaultDialer.Dial(url, nil)
 	if err != nil {
