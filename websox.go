@@ -33,9 +33,17 @@ func (e ErrMsg) Error() error {
 // Admin returns channels to get data and return the error when trying to save said data
 type Admin func() (chan interface{}, chan error)
 
+type Validator func(*http.Request) error
+
 // Pusher will apply Admin functionality to a websocket server connection
-func Pusher(admin Admin) http.HandlerFunc {
+func Pusher(admin Admin, valid Validator) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if valid != nil {
+			if err := valid(r); err != nil {
+				http.Error(w, err.Error(), http.StatusForbidden)
+				return
+			}
+		}
 		fmt.Printf("pusher origin:%s host:%s\n", r.Header.Get("Origin"), r.Host)
 		getter, teller := admin()
 		upgrader := websocket.Upgrader{} // use default options
@@ -83,12 +91,10 @@ func Pusher(admin Admin) http.HandlerFunc {
 type Actionable func([]byte) error
 
 // Client will connect to url and apply the Actionable function to each message recieved
-func Client(url string, fn Actionable) {
+func Client(url string, fn Actionable, headers http.Header) {
 	log.Printf("connecting to %s", url)
 
-	// TODO: add oauth2 security
-
-	c, _, err := websocket.DefaultDialer.Dial(url, nil)
+	c, _, err := websocket.DefaultDialer.Dial(url, headers)
 	if err != nil {
 		log.Fatal("dial:", err)
 	}

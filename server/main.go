@@ -37,11 +37,22 @@ func main() {
 	log.SetFlags(0)
 
 	fmt.Println("setting up http handlers")
-	http.HandleFunc("/push", websox.Pusher(fakeLoop))
+	http.HandleFunc("/push", websox.Pusher(fakeLoop, notVerySafe))
 	http.HandleFunc("/", home)
 
 	fmt.Println("listening on:", *addr)
 	log.Fatal(http.ListenAndServe(*addr, nil))
+}
+
+func notVerySafe(r *http.Request) error {
+	secret := r.Header.Get("x-secret-code")
+	if len(secret) == 0 {
+		return fmt.Errorf("no secret given")
+	}
+	if secret != "Open Sesame!" {
+		return fmt.Errorf("bad secret")
+	}
+	return nil
 }
 
 func fakeLoop() (chan interface{}, chan error) {

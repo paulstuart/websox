@@ -9,6 +9,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net/http"
 	"net/url"
 	"strings"
 
@@ -27,7 +28,9 @@ func main() {
 	if strings.HasSuffix(*addr, "443") {
 		u.Scheme += "s"
 	}
-	websox.Client(u.String(), gotIt)
+	headers := make(http.Header)
+	headers.Add("x-secret-code", "Open Sesame!")
+	websox.Client(u.String(), gotIt, headers)
 }
 
 var cnt int
