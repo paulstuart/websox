@@ -9,6 +9,7 @@ package websox
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -33,6 +34,7 @@ func (e ErrMsg) Error() error {
 // Admin returns channels to get data and return the error when trying to save said data
 type Admin func() (chan interface{}, chan error)
 
+// Validator will validate requests to a web page
 type Validator func(*http.Request) error
 
 // Pusher will apply Admin functionality to a websocket server connection
@@ -94,9 +96,10 @@ type Actionable func([]byte) error
 func Client(url string, fn Actionable, headers http.Header) {
 	log.Printf("connecting to %s", url)
 
-	c, _, err := websocket.DefaultDialer.Dial(url, headers)
+	c, resp, err := websocket.DefaultDialer.Dial(url, headers)
 	if err != nil {
-		log.Fatal("dial:", err)
+		io.Copy(os.Stdout, resp.Body)
+		log.Fatalf("dial code:%d status:%s error:%v\n", resp.StatusCode, resp.Status, err)
 	}
 	defer c.Close()
 
