@@ -17,8 +17,9 @@ import (
 )
 
 var (
-	port = os.Getenv("PORT")
-	addr *string
+	port  = os.Getenv("PORT")
+	addr  *string
+	delay *bool
 )
 
 func init() {
@@ -26,6 +27,7 @@ func init() {
 		port = "8080"
 	}
 	addr = flag.String("addr", ":"+port, "http service address")
+	delay = flag.Bool("delay", false, "add randomized delay")
 }
 
 func home(w http.ResponseWriter, r *http.Request) {
@@ -73,8 +75,11 @@ func fakeLoop() (chan interface{}, chan error) {
 			if err != nil {
 				fmt.Println("fakeloop got error:", err)
 			}
-			delay := rand.Intn(5)
-			time.Sleep(time.Second * time.Duration(delay))
+
+			if *delay {
+				pause := rand.Intn(5)
+				time.Sleep(time.Second * time.Duration(pause))
+			}
 		}
 	}()
 
