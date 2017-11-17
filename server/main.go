@@ -7,22 +7,24 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"math/rand"
 	"net/http"
 	"os"
 	"time"
 
+	"github.build.ge.com/Aviation-APM/oauth2-auth"
 	"github.com/paulstuart/websox"
 )
 
 var (
-	port  = os.Getenv("PORT")
 	addr  *string
 	delay *bool
 )
 
 func init() {
+	port := os.Getenv("PORT")
 	if len(port) == 0 {
 		port = "8080"
 	}
@@ -38,23 +40,26 @@ func main() {
 	flag.Parse()
 	log.SetFlags(0)
 
+	valid, err := oauth2auth.MakeValidatorFromEnvironment()
+	if err != nil {
+		panic(err)
+	}
+
+	var expires *time.Duration
+	if refresh_period := os.Getenv("refresh_period"); len(refresh_period) > 0 {
+		dur, err := time.ParseDuration(refresh_period)
+		if err != nil {
+			panic(err)
+		}
+		expires = &dur
+	}
+
 	fmt.Println("setting up http handlers")
-	http.HandleFunc("/push", websox.Pusher(fakeLoop, notVerySafe))
+	http.HandleFunc("/push", valid.AuthorizationRequired(websox.Pusher(fakeLoop, expires)))
 	http.HandleFunc("/", home)
 
 	fmt.Println("listening on:", *addr)
 	log.Fatal(http.ListenAndServe(*addr, nil))
-}
-
-func notVerySafe(r *http.Request) error {
-	secret := r.Header.Get("x-secret-code")
-	if len(secret) == 0 {
-		return fmt.Errorf("no secret given")
-	}
-	if secret != "Open Sesame!" {
-		return fmt.Errorf("bad secret")
-	}
-	return nil
 }
 
 func fakeLoop() (chan interface{}, chan error) {
