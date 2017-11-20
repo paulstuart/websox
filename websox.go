@@ -38,6 +38,8 @@ func (e ErrMsg) Error() error {
 // Setup returns channels to get data and return the error when trying to save said data
 // If the setup function cannot do the required processing,
 // it should return a nil interface channel and send an error message in the error channel
+//
+// The error channel is closed by Pusher() when it id done processing (due to timeout or error)
 type Setup func() (chan interface{}, chan error)
 
 // Pusher gets send/recv channels from the setup function

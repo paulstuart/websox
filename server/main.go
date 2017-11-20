@@ -7,7 +7,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"io"
 	"log"
 	"math/rand"
 	"net/http"
@@ -76,7 +75,10 @@ func fakeLoop() (chan interface{}, chan error) {
 				Count: i,
 				TS:    time.Now(),
 			}
-			err := <-teller
+			err, ok := <-teller
+			if !ok {
+				break
+			}
 			if err != nil {
 				fmt.Println("fakeloop got error:", err)
 			}
