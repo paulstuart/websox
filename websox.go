@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -20,6 +21,10 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/pkg/errors"
+)
+
+const (
+	writeWait = time.Second
 )
 
 // ErrMsg is for reporting errors on websocket pushes
@@ -53,16 +58,28 @@ func Pusher(setup Setup, expires *time.Duration) http.HandlerFunc {
 		getter, teller := setup()
 		if getter == nil {
 			err := <-teller
+			close(teller)
+			log.Println("Pusher setup error:", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 
 		upgrader := websocket.Upgrader{} // use default options
-		c, err := upgrader.Upgrade(w, r, nil)
+		conn, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
 			log.Print("push upgrade error:", err)
 			return
 		}
+
+		closeHandler := conn.CloseHandler()
+		conn.SetCloseHandler(func(code int, text string) error {
+			log.Printf("got close code: %d text: %s\n", code, text)
+			if closeHandler != nil {
+				log.Println("calling original closeHandler")
+				return closeHandler(code, text)
+			}
+			return nil
+		})
 
 		var stop time.Time
 		if expires != nil {
@@ -75,10 +92,13 @@ func Pusher(setup Setup, expires *time.Duration) http.HandlerFunc {
 				break
 			}
 
+			log.Println("waiting for getter")
 			stuff, ok := <-getter
 			if !ok {
+				log.Println("getter is closed")
 				break
 			}
+			log.Println("marshaling stuff:", stuff)
 			b, err := json.Marshal(stuff)
 			if err != nil {
 				log.Println("pusher json error:", err)
@@ -92,13 +112,13 @@ func Pusher(setup Setup, expires *time.Duration) http.HandlerFunc {
 			z.Write(b)
 			z.Close()
 
-			if err = c.WriteMessage(websocket.BinaryMessage, buff.Bytes()); err != nil {
+			if err = conn.WriteMessage(websocket.BinaryMessage, buff.Bytes()); err != nil {
 				log.Println("pusher write error:", err)
 				teller <- err
 				break
 			}
 
-			_, message, err := c.ReadMessage()
+			_, message, err := conn.ReadMessage()
 			if err != nil {
 				log.Println("pusher read error:", err)
 				teller <- err
@@ -114,55 +134,116 @@ func Pusher(setup Setup, expires *time.Duration) http.HandlerFunc {
 
 			teller <- status.Error()
 		}
-		err = c.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
+		log.Println("websocket server closing")
+		close(teller)
+		err = conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
 		if err != nil {
 			log.Println("websocket server close error:", err)
 		}
-		c.Close()
+		conn.Close()
 	}
 }
 
-// Actionable functions process an io.Reader and return an error if such is encountered
-type Actionable func(io.Reader) error
+// Actionable functions process an io.Reader and returns
+// a bool set false if to close the client, and an error if such is encountered
+type Actionable func(io.Reader) (bool, error)
 
 // Client will connect to url and apply the Actionable function to each message recieved
-func Client(url string, fn Actionable, headers http.Header) error {
+func Client(url string, fn Actionable, pingFreq time.Duration, headers http.Header) error {
 	log.Printf("connecting to %s", url)
 
-	c, resp, err := websocket.DefaultDialer.Dial(url, headers)
+	conn, resp, err := websocket.DefaultDialer.Dial(url, headers)
 	if err != nil {
-		io.Copy(os.Stdout, resp.Body)
-		return errors.Wrapf(err, "dial code:%d status:%s", resp.StatusCode, resp.Status)
+		if resp != nil {
+			if resp.Body != nil {
+				io.Copy(os.Stdout, resp.Body)
+			}
+			return errors.Wrapf(err, "dial code:%d status:%s", resp.StatusCode, resp.Status)
+		}
+		return errors.Wrap(err, "websocket dial error for url: "+url)
 	}
-	defer c.Close()
+
+	closeHandler := conn.CloseHandler()
+	conn.SetCloseHandler(func(code int, text string) error {
+		log.Printf("got close code: %d text: %s\n", code, text)
+		if closeHandler != nil {
+			log.Println("calling original closeHandler")
+			return closeHandler(code, text)
+		}
+		return nil
+	})
+
+	ping := func(now time.Time) error {
+		err := conn.WriteControl(websocket.PingMessage, []byte(now.String()), now.Add(writeWait))
+		if err == websocket.ErrCloseSent {
+			return nil
+		} else if e, ok := err.(net.Error); ok && e.Temporary() {
+			return nil
+		}
+		return err
+	}
 
 	notify := make(chan os.Signal, 1)
 	signal.Notify(notify, os.Interrupt)
+	ticker := time.NewTicker(pingFreq)
+
+	cleanup := func() {
+		// To cleanly close a connection, a client should send a close
+		// frame and wait for the server to close the connection.
+		log.Println("cleaning up and closing")
+		err := conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
+		if err != nil {
+			log.Println("websocket close error:", err)
+		}
+		conn.Close()
+		ticker.Stop()
+	}
+
+	defer cleanup()
 
 	go func() {
 		what := <-notify
 		log.Println("interrupt:", what)
 
-		// To cleanly close a connection, a client should send a close
-		// frame and wait for the server to close the connection.
-		err := c.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
-		if err != nil {
-			log.Println("websocket close error:", err)
-		}
-		c.Close()
+		cleanup()
 		os.Exit(0)
 	}()
 
-	for {
-		messageType, r, err := c.NextReader()
+	go func() {
+		log.Println("starting ticker:", ticker)
+		for now := range ticker.C {
+			fmt.Println("PING:", now)
+
+			if err := ping(now); err != nil {
+				log.Println("error sending ping:", err)
+			}
+			/*
+				if err := conn.WriteControl(websocket.PingMessage, []byte(now.String())); err != nil {
+					log.Println("error sending ping:", err)
+				}
+			*/
+		}
+	}()
+
+	conn.SetPongHandler(func(s string) error {
+		log.Print("GOT A PONG:", s)
+		return nil
+	})
+
+	log.Printf("connected to %s", url)
+	ok := true
+	for ok {
+		messageType, r, err := conn.NextReader()
 		if err != nil {
+			log.Println("NextReader error:", err)
 			return err
 		}
 
 		if messageType != websocket.BinaryMessage {
-			fmt.Printf("MSG (%T):", messageType)
+			log.Printf("MSG (%T):", messageType)
 			io.Copy(os.Stdout, r)
 		}
+
 		if messageType == websocket.CloseMessage {
 			log.Println("got websocket close message")
 			return nil
@@ -171,7 +252,8 @@ func Client(url string, fn Actionable, headers http.Header) error {
 		// decompress the message before the function sees it
 		z, err := zlib.NewReader(r)
 		if err == nil {
-			err = fn(z)
+			ok, err = fn(z)
+			log.Println("fn err:", err)
 		}
 
 		var status ErrMsg
@@ -186,7 +268,7 @@ func Client(url string, fn Actionable, headers http.Header) error {
 			continue
 		}
 
-		if err := c.WriteMessage(websocket.TextMessage, b); err != nil {
+		if err := conn.WriteMessage(websocket.TextMessage, b); err != nil {
 			return errors.Wrap(err, "status write error")
 		}
 	}

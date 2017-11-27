@@ -10,6 +10,7 @@ import (
 	"log"
 	"math/rand"
 	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"time"
 
@@ -53,11 +54,16 @@ func main() {
 		expires = &dur
 	}
 
-	fmt.Println("setting up http handlers")
+	log.Println("setting up http handlers")
+	log.Println(
+		"uaa_client_id:", os.Getenv("uaa_client_id"),
+		"uaa_client_secret:", os.Getenv("uaa_client_secret"),
+		"uaa_url:", os.Getenv("uaa_url"),
+	)
 	http.HandleFunc("/push", valid.AuthorizationRequired(websox.Pusher(fakeLoop, expires)))
 	http.HandleFunc("/", home)
 
-	fmt.Println("listening on:", *addr)
+	log.Println("listening on:", *addr)
 	log.Fatal(http.ListenAndServe(*addr, nil))
 }
 
@@ -70,6 +76,11 @@ func fakeLoop() (chan interface{}, chan error) {
 	go func() {
 		for {
 			i++
+			if i%1000 == 0 {
+				log.Println("waiting for a couple minutes")
+				time.Sleep(time.Minute * 2)
+			}
+
 			getter <- websox.Stuff{
 				Msg:   fmt.Sprintf("msg number: %d", i),
 				Count: i,
@@ -77,6 +88,7 @@ func fakeLoop() (chan interface{}, chan error) {
 			}
 			err, ok := <-teller
 			if !ok {
+				fmt.Println("teller must be closed")
 				break
 			}
 			if err != nil {
@@ -88,6 +100,8 @@ func fakeLoop() (chan interface{}, chan error) {
 				time.Sleep(time.Second * time.Duration(pause))
 			}
 		}
+		log.Println("fakeLoop is closing")
+		close(getter)
 	}()
 
 	return getter, teller

@@ -1,6 +1,6 @@
 ---
 applications:
-- name: websox-oracle        
+- name: websox-server        
   memory: 32M
   disk_quota: 32M
   instances: 1
