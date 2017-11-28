@@ -29,12 +29,6 @@ var (
 )
 
 func main() {
-	period := os.Getenv("ping_period")
-	pingPeriod, err := time.ParseDuration(period)
-	if len(period) > 0 && err != nil {
-		log.Fatal(err)
-	}
-	flag.DurationVar(&pingPeriod, "k", pingPeriod, "keepalive ping frequency")
 
 	if len(server_addr) == 0 {
 		server_addr = "localhost:8080"
@@ -43,10 +37,6 @@ func main() {
 	debug := flag.Bool("debug", false, "enable debugging")
 	flag.Parse()
 	log.SetFlags(0)
-
-	if pingPeriod == 0 {
-		log.Fatal("ping period must be greater than 0")
-	}
 
 	u := url.URL{Scheme: "ws", Host: *addr, Path: "/push"}
 	if strings.HasSuffix(*addr, "443") {
@@ -64,7 +54,7 @@ func main() {
 		if err != nil {
 			panic(err)
 		}
-		err = websox.Client(u.String(), gotIt, pingPeriod, headers)
+		err = websox.Client(u.String(), gotIt, headers)
 		if !websocket.IsCloseError(err, websocket.CloseNormalClosure) {
 			fmt.Printf("(%T) %v\n", err, err)
 		}
@@ -73,23 +63,9 @@ func main() {
 	}
 }
 
-var (
-	mu  sync.Mutex
-	cnt int
-)
-
 func gotIt(r io.Reader) (bool, error) {
 	var s websox.Stuff
 	ok := true
-	/*
-		mu.Lock()
-		cnt++
-		if cnt == 1000 {
-			cnt = 0
-			ok = false
-		}
-		mu.Unlock()
-	*/
 	if err := json.NewDecoder(r).Decode(&s); err != nil {
 		fmt.Println("json error:", err)
 		return ok, err
