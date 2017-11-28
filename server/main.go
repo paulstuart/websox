@@ -12,6 +12,7 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 	"os"
+	"sync"
 	"time"
 
 	"github.build.ge.com/Aviation-APM/oauth2-auth"
@@ -19,8 +20,11 @@ import (
 )
 
 var (
-	addr  *string
-	delay *bool
+	addr   *string
+	delay  *bool
+	mu     sync.Mutex
+	wg     sync.WaitGroup
+	locked bool
 )
 
 func init() {
@@ -33,25 +37,42 @@ func init() {
 }
 
 func home(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintln(w, "hello")
+	fmt.Fprintln(w, "hello, whirled")
+}
+
+func lock(w http.ResponseWriter, r *http.Request) {
+	mu.Lock()
+	if locked {
+		wg.Done()
+	} else {
+		wg.Add(1)
+	}
+	locked = !locked
+	fmt.Fprintln(w, "locked:", locked)
+	mu.Unlock()
 }
 
 func main() {
 	flag.Parse()
 	log.SetFlags(0)
 
+	period := os.Getenv("ping_period")
+	pingPeriod, err := time.ParseDuration(period)
+	if len(period) > 0 && err != nil {
+		log.Fatal(err)
+	}
+
 	valid, err := oauth2auth.MakeValidatorFromEnvironment()
 	if err != nil {
 		panic(err)
 	}
 
-	var expires *time.Duration
+	var expires time.Duration
 	if refresh_period := os.Getenv("refresh_period"); len(refresh_period) > 0 {
-		dur, err := time.ParseDuration(refresh_period)
+		expires, err = time.ParseDuration(refresh_period)
 		if err != nil {
 			panic(err)
 		}
-		expires = &dur
 	}
 
 	log.Println("setting up http handlers")
@@ -60,7 +81,8 @@ func main() {
 		"uaa_client_secret:", os.Getenv("uaa_client_secret"),
 		"uaa_url:", os.Getenv("uaa_url"),
 	)
-	http.HandleFunc("/push", valid.AuthorizationRequired(websox.Pusher(fakeLoop, expires)))
+	http.HandleFunc("/push", valid.AuthorizationRequired(websox.Pusher(fakeLoop, expires, pingPeriod)))
+	http.HandleFunc("/lock", lock)
 	http.HandleFunc("/", home)
 
 	log.Println("listening on:", *addr)
@@ -75,11 +97,9 @@ func fakeLoop() (chan interface{}, chan error) {
 
 	go func() {
 		for {
+			// turn off and on by accessing /lock on the server side
+			wg.Wait()
 			i++
-			if i%1000 == 0 {
-				log.Println("waiting for a couple minutes")
-				time.Sleep(time.Minute * 2)
-			}
 
 			getter <- websox.Stuff{
 				Msg:   fmt.Sprintf("msg number: %d", i),
@@ -91,7 +111,7 @@ func fakeLoop() (chan interface{}, chan error) {
 				fmt.Println("teller must be closed")
 				break
 			}
-			if err != nil {
+			if false && err != nil {
 				fmt.Println("fakeloop got error:", err)
 			}
 
