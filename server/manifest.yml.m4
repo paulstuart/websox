@@ -8,6 +8,7 @@ applications:
   command: ./server
   buildpack: https://github.com/cloudfoundry/binary-buildpack.git
   env:
+        ping_period: 30s
         uaa_client_id: UAA_CLIENT_ID
         uaa_client_secret: UAA_CLIENT_SECRET
         uaa_url: UAA_URL
