@@ -40,6 +40,7 @@ func Pusher(setup Setup, expires, pingFreq time.Duration) http.HandlerFunc {
 		getter, teller := setup()
 		if getter == nil {
 			err := <-teller
+			log.Println("closing teller - app startup failure")
 			close(teller)
 			log.Println("Pusher setup error:", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -106,6 +107,8 @@ func Pusher(setup Setup, expires, pingFreq time.Duration) http.HandlerFunc {
 			timeout = time.NewTimer(expires).C
 		}
 
+		quit := make(chan struct{})
+
 		var wg sync.WaitGroup
 		wg.Add(1)
 		go func() {
@@ -113,12 +116,14 @@ func Pusher(setup Setup, expires, pingFreq time.Duration) http.HandlerFunc {
 				messageType, message, err := conn.ReadMessage()
 				if err != nil {
 					log.Println("pusher read error:", err)
+					quit <- struct{}{}
 					break
 				}
 
 				switch messageType {
 				case websocket.CloseMessage:
 					log.Println("uhoh! closing time!")
+					quit <- struct{}{}
 					break
 				case websocket.PingMessage:
 					log.Println("PING!")
@@ -137,7 +142,7 @@ func Pusher(setup Setup, expires, pingFreq time.Duration) http.HandlerFunc {
 
 				teller <- status.Error()
 			}
-			log.Println("existing read loop")
+			log.Println("====> exiting read loop")
 			wg.Done()
 		}()
 
@@ -145,6 +150,9 @@ func Pusher(setup Setup, expires, pingFreq time.Duration) http.HandlerFunc {
 			select {
 			case <-timeout:
 				log.Println("session has expired")
+				goto DONE
+			case <-quit:
+				log.Println("it's quitting time")
 				goto DONE
 			case now := <-ticker.C:
 				log.Println("time to ping:", now, "err:", ping(now))

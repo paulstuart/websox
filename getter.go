@@ -58,7 +58,6 @@ func Client(url string, fn Actionable, headers http.Header) error {
 			log.Println("websocket close error:", err)
 		}
 		conn.Close()
-		os.Exit(0)
 	}
 
 	defer cleanup()
