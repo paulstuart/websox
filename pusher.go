@@ -12,6 +12,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -105,6 +106,8 @@ func Pusher(setup Setup, expires, pingFreq time.Duration) http.HandlerFunc {
 			timeout = time.NewTimer(expires).C
 		}
 
+		var wg sync.WaitGroup
+		wg.Add(1)
 		go func() {
 			for {
 				messageType, message, err := conn.ReadMessage()
@@ -135,6 +138,7 @@ func Pusher(setup Setup, expires, pingFreq time.Duration) http.HandlerFunc {
 				teller <- status.Error()
 			}
 			log.Println("existing read loop")
+			wg.Done()
 		}()
 
 		for {
@@ -157,11 +161,13 @@ func Pusher(setup Setup, expires, pingFreq time.Duration) http.HandlerFunc {
 
 	DONE:
 		log.Println("websocket server closing")
-		close(teller)
 		err = conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
 		if err != nil {
 			log.Println("websocket server close error:", err)
 		}
 		conn.Close()
+		wg.Wait()
+		log.Println("close teller")
+		close(teller)
 	}
 }
