@@ -116,7 +116,10 @@ func Pusher(setup Setup, expires, pingFreq time.Duration) http.HandlerFunc {
 				messageType, message, err := conn.ReadMessage()
 				if err != nil {
 					log.Println("pusher read error:", err)
-					quit <- struct{}{}
+					go func() {
+						log.Println("sending to quit channel")
+						quit <- struct{}{}
+					}()
 					break
 				}
 

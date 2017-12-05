@@ -14,7 +14,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"os/signal"
 
 	"github.com/gorilla/websocket"
 	"github.com/pkg/errors"
@@ -49,7 +48,7 @@ func Client(url string, fn Actionable, headers http.Header) error {
 		return nil
 	})
 
-	cleanup := func() {
+	defer func() {
 		// To cleanly close a connection, a client should send a close
 		// frame and wait for the server to close the connection.
 		log.Println("cleaning up and closing")
@@ -58,18 +57,6 @@ func Client(url string, fn Actionable, headers http.Header) error {
 			log.Println("websocket close error:", err)
 		}
 		conn.Close()
-	}
-
-	defer cleanup()
-
-	notify := make(chan os.Signal, 1)
-	signal.Notify(notify, os.Interrupt)
-
-	go func() {
-		what := <-notify
-		log.Println("interrupt:", what)
-
-		cleanup()
 	}()
 
 	pingHandler := conn.PingHandler()
