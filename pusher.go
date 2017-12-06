@@ -12,7 +12,6 @@ import (
 	"log"
 	"net"
 	"net/http"
-	// "sync"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -109,10 +108,6 @@ func Pusher(setup Setup, expires, pingFreq time.Duration) http.HandlerFunc {
 
 		quit := make(chan struct{})
 
-		/*
-			var wg sync.WaitGroup
-			wg.Add(1)
-		*/
 		go func() {
 			for {
 				messageType, message, err := conn.ReadMessage()
@@ -121,6 +116,7 @@ func Pusher(setup Setup, expires, pingFreq time.Duration) http.HandlerFunc {
 					go func() {
 						log.Println("sending to quit channel")
 						quit <- struct{}{}
+						log.Println("sent to quit channel")
 					}()
 					break
 				}
@@ -150,7 +146,6 @@ func Pusher(setup Setup, expires, pingFreq time.Duration) http.HandlerFunc {
 				teller <- status.Error()
 			}
 			log.Println("====> exiting read loop")
-			//wg.Done()
 		}()
 
 		for {
@@ -181,7 +176,6 @@ func Pusher(setup Setup, expires, pingFreq time.Duration) http.HandlerFunc {
 			log.Println("websocket server close error:", err)
 		}
 		conn.Close()
-		//wg.Wait()
 		log.Println("close teller")
 		close(teller)
 	}
