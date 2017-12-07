@@ -157,7 +157,10 @@ func Pusher(setup Setup, expires, pingFreq time.Duration) http.HandlerFunc {
 				log.Println("it's quitting time")
 				goto DONE
 			case now := <-ticker.C:
-				log.Println("time to ping:", now, "err:", ping(now))
+				if err := ping(now); err != nil {
+					log.Println("ping error:", err)
+					goto DONE
+				}
 			case stuff, ok := <-getter:
 				if !ok {
 					log.Println("getter is closed")
