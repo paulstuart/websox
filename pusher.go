@@ -12,6 +12,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -31,6 +32,8 @@ type Setup func() (chan interface{}, chan error)
 // Pusher gets send/recv channels from the setup function
 // and apply the channel data to a websocket connection
 func Pusher(setup Setup, expires, pingFreq time.Duration) http.HandlerFunc {
+	const flags = log.Ldate | log.Lmicroseconds | log.Lshortfile
+	logger := log.New(os.Stderr, "", flags)
 	return func(w http.ResponseWriter, r *http.Request) {
 
 		// TODO: should we do origin checking?
@@ -39,9 +42,9 @@ func Pusher(setup Setup, expires, pingFreq time.Duration) http.HandlerFunc {
 		getter, teller := setup()
 		if getter == nil {
 			err := <-teller
-			log.Println("closing teller - app startup failure")
+			logger.Println("closing teller - app startup failure")
 			close(teller)
-			log.Println("Pusher setup error:", err)
+			logger.Println("Pusher setup error:", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -57,7 +60,7 @@ func Pusher(setup Setup, expires, pingFreq time.Duration) http.HandlerFunc {
 		conn.SetCloseHandler(func(code int, text string) error {
 			log.Printf("got close code: %d text: %s\n", code, text)
 			if closeHandler != nil {
-				log.Println("calling original closeHandler")
+				logger.Println("calling original closeHandler")
 				return closeHandler(code, text)
 			}
 			return nil
@@ -112,58 +115,53 @@ func Pusher(setup Setup, expires, pingFreq time.Duration) http.HandlerFunc {
 			for {
 				messageType, message, err := conn.ReadMessage()
 				if err != nil {
-					log.Println("pusher read error:", err)
-					go func() {
-						log.Println("sending to quit channel")
-						quit <- struct{}{}
-						log.Println("sent to quit channel")
-					}()
+					logger.Println("pusher read error:", err)
+					quit <- struct{}{}
+					logger.Println("sent to quit channel")
 					break
 				}
 
 				switch messageType {
 				case websocket.CloseMessage:
-					log.Println("uhoh! closing time!")
-					go func() {
-						quit <- struct{}{}
-					}()
+					logger.Println("uhoh! closing time!")
+					quit <- struct{}{}
 					break
 				case websocket.PingMessage:
-					log.Println("PING!")
+					logger.Println("PING!")
 					continue
 				case websocket.PongMessage:
-					log.Println("PONG!")
+					logger.Println("PONG!")
 					continue
 				}
 
 				var status ErrMsg
 				if err := json.Unmarshal(message, &status); err != nil {
-					log.Println("status json error:", err)
+					logger.Println("status json error:", err)
 					teller <- err
 					continue
 				}
 
 				teller <- status.Error()
 			}
-			log.Println("====> exiting read loop")
+			logger.Println("====> exiting read loop")
 		}()
 
 		for {
 			select {
 			case <-timeout:
-				log.Println("session has expired")
+				logger.Println("session has expired")
 				goto DONE
 			case <-quit:
-				log.Println("it's quitting time")
+				logger.Println("it's quitting time")
 				goto DONE
 			case now := <-ticker.C:
 				if err := ping(now); err != nil {
-					log.Println("ping error:", err)
+					logger.Println("ping error:", err)
 					goto DONE
 				}
 			case stuff, ok := <-getter:
 				if !ok {
-					log.Println("getter is closed")
+					logger.Println("getter is closed")
 					goto DONE
 				}
 				if err := send(stuff); err != nil {
@@ -173,13 +171,13 @@ func Pusher(setup Setup, expires, pingFreq time.Duration) http.HandlerFunc {
 		}
 
 	DONE:
-		log.Println("websocket server closing")
+		logger.Println("websocket server closing")
 		err = conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
 		if err != nil {
-			log.Println("websocket server close error:", err)
+			logger.Println("websocket server close error:", err)
 		}
 		conn.Close()
-		log.Println("close teller")
+		logger.Println("close teller")
 		close(teller)
 	}
 }
