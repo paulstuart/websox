@@ -24,7 +24,7 @@ import (
 type Actionable func(io.Reader) (bool, error)
 
 // Client will connect to url and apply the Actionable function to each message recieved
-func Client(url string, fn Actionable, headers http.Header) error {
+func Client(url string, fn Actionable, pings bool, headers http.Header) error {
 	log.Printf("connecting to %s", url)
 
 	conn, resp, err := websocket.DefaultDialer.Dial(url, headers)
@@ -59,11 +59,13 @@ func Client(url string, fn Actionable, headers http.Header) error {
 		conn.Close()
 	}()
 
-	pingHandler := conn.PingHandler()
-	conn.SetPingHandler(func(s string) error {
-		log.Print("GOT A PING:", s)
-		return pingHandler(s)
-	})
+	if pings {
+		pingHandler := conn.PingHandler()
+		conn.SetPingHandler(func(s string) error {
+			log.Print("GOT A PING:", s)
+			return pingHandler(s)
+		})
+	}
 
 	log.Printf("connected to %s", url)
 	ok := true
@@ -87,7 +89,7 @@ func Client(url string, fn Actionable, headers http.Header) error {
 		}
 
 		if messageType != websocket.BinaryMessage {
-			log.Printf("GOT MSG (%T):", messageType)
+			log.Printf("UNKNOWN MSG (%T):", messageType)
 			io.Copy(os.Stdout, r)
 			continue
 		}
@@ -96,7 +98,9 @@ func Client(url string, fn Actionable, headers http.Header) error {
 		z, err := zlib.NewReader(r)
 		if err == nil {
 			ok, err = fn(z)
-			log.Println("fn err:", err)
+			if err != nil {
+				log.Println("fn err:", err)
+			}
 		}
 
 		var status ErrMsg
