@@ -125,8 +125,6 @@ func Pusher(setup Setup, expires, pingFreq time.Duration) http.HandlerFunc {
 		}
 
 		quit := make(chan struct{})
-		var wg sync.WaitGroup
-		wg.Add(2)
 
 		go func() {
 			for {
@@ -155,49 +153,46 @@ func Pusher(setup Setup, expires, pingFreq time.Duration) http.HandlerFunc {
 					continue
 				}
 
-				teller <- status.Error()
+				go func() {
+					teller <- status.Error()
+				}()
 			}
+			logger.Println("====> read loop complete")
+			quit <- struct{}{}
 			logger.Println("====> exiting read loop")
-			wg.Done()
 		}()
 
-		go func() {
-
-		loop:
-			for {
-				select {
-				case <-timeout:
-					logger.Println("session has expired")
+	loop:
+		for {
+			select {
+			case <-timeout:
+				logger.Println("session has expired")
+				break loop
+			case <-quit:
+				logger.Println("it's quitting time")
+				break loop
+			case now := <-ticker.C:
+				if err := ping(now); err != nil {
+					logger.Println("ping error:", err)
 					break loop
-				case <-quit:
-					logger.Println("it's quitting time")
+				}
+			case stuff, ok := <-getter:
+				if !ok {
+					logger.Println("getter is closed")
 					break loop
-				case now := <-ticker.C:
-					if err := ping(now); err != nil {
-						logger.Println("ping error:", err)
-						break loop
-					}
-				case stuff, ok := <-getter:
-					if !ok {
-						logger.Println("getter is closed")
-						break loop
-					}
-					if err := send(stuff); err != nil {
-						teller <- err
-					}
+				}
+				if err := send(stuff); err != nil {
+					teller <- err
 				}
 			}
-			logger.Println("====> exiting write loop")
-			wg.Done()
-		}()
-
-		wg.Wait()
+		}
 		logger.Println("websocket server closing")
 		err = conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
 		if err != nil {
 			logger.Println("websocket server close error:", err)
 		}
 		conn.Close()
+		<-quit
 		logger.Println("close teller")
 		close(teller)
 	}
