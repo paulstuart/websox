@@ -20,8 +20,10 @@ import (
 )
 
 // Actionable functions process an io.Reader and returns
-// a bool set false if to close the client, and an error if such is encountered
-type Actionable func(io.Reader) (bool, error)
+// any relevant results
+// a bool set false if to close the client,
+// and an error if such is encountered
+type Actionable func(io.Reader) (interface{}, bool, error)
 
 // Client will connect to url and apply the Actionable function to each message recieved
 func Client(url string, fn Actionable, pings bool, headers http.Header) error {
@@ -95,21 +97,22 @@ func Client(url string, fn Actionable, pings bool, headers http.Header) error {
 		}
 
 		// decompress the message before the function sees it
+		var reply interface{}
 		z, err := zlib.NewReader(r)
 		if err == nil {
-			ok, err = fn(z)
+			reply, ok, err = fn(z)
 			if err != nil {
 				log.Println("fn err:", err)
 			}
 		}
-
-		var status ErrMsg
-		if err != nil {
-			status.Msg = err.Error()
-		}
 		z.Close()
 
-		b, err := json.Marshal(status)
+		results := Results{
+			Err:     err,
+			Payload: reply,
+		}
+
+		b, err := json.Marshal(results)
 		if err != nil {
 			fmt.Println("status json error:", err)
 			continue

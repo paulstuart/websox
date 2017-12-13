@@ -42,7 +42,7 @@ func pusherID() string {
 // it should return a nil interface channel and send an error message in the error channel
 //
 // The error channel is closed by Pusher() when it id done processing (due to timeout or error)
-type Setup func() (chan interface{}, chan error)
+type Setup func() (chan interface{}, chan Results)
 
 // Pusher gets send/recv channels from the setup function
 // and apply the channel data to a websocket connection
@@ -56,11 +56,11 @@ func Pusher(setup Setup, expires, pingFreq time.Duration) http.HandlerFunc {
 
 		getter, teller := setup()
 		if getter == nil {
-			err := <-teller
+			results := <-teller
 			logger.Println("closing teller - app startup failure")
 			close(teller)
-			logger.Println("Pusher setup error:", err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			logger.Println("Pusher setup error:", results.Err)
+			http.Error(w, results.Err.Error(), http.StatusInternalServerError)
 			return
 		}
 
@@ -146,15 +146,15 @@ func Pusher(setup Setup, expires, pingFreq time.Duration) http.HandlerFunc {
 					continue
 				}
 
-				var status ErrMsg
-				if err := json.Unmarshal(message, &status); err != nil {
+				var results Results
+				if err := json.Unmarshal(message, &results); err != nil {
 					logger.Println("status json error:", err)
-					teller <- err
+					teller <- Results{Err: err}
 					continue
 				}
 
 				go func() {
-					teller <- status.Error()
+					teller <- results
 				}()
 			}
 			logger.Println("====> read loop complete")
@@ -182,7 +182,7 @@ func Pusher(setup Setup, expires, pingFreq time.Duration) http.HandlerFunc {
 					break loop
 				}
 				if err := send(stuff); err != nil {
-					teller <- err
+					teller <- Results{Err: err}
 				}
 			}
 		}

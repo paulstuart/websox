@@ -89,11 +89,11 @@ func main() {
 	log.Fatal(http.ListenAndServe(*addr, nil))
 }
 
-func fakeLoop() (chan interface{}, chan error) {
+func fakeLoop() (chan interface{}, chan websox.Results) {
 	var i int
 
 	getter := make(chan interface{})
-	teller := make(chan error)
+	teller := make(chan websox.Results)
 
 	go func() {
 		for {
@@ -106,13 +106,13 @@ func fakeLoop() (chan interface{}, chan error) {
 				Count: i,
 				TS:    time.Now(),
 			}
-			err, ok := <-teller
+			results, ok := <-teller
 			if !ok {
 				fmt.Println("teller must be closed")
 				break
 			}
-			if false && err != nil {
-				fmt.Println("fakeloop got error:", err)
+			if false && results.Err != nil {
+				fmt.Println("fakeloop got error:", results.Err)
 			}
 
 			if *delay {

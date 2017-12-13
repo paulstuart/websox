@@ -7,21 +7,13 @@
 package websox
 
 import (
-	"fmt"
 	"time"
 )
 
-// ErrMsg is for reporting errors on websocket pushes
-type ErrMsg struct {
-	Msg string `json:"errmsg"`
-}
-
-// Error returns an error if any error message is returned
-func (e ErrMsg) Error() error {
-	if len(e.Msg) == 0 {
-		return nil
-	}
-	return fmt.Errorf(e.Msg)
+// Results is used to return client results / errors on websocket pushes
+type Results struct {
+	Err     error       `json:"error"`
+	Payload interface{} `json:"payload"`
 }
 
 // Stuff is a sample struct for testing
