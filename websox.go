@@ -12,7 +12,7 @@ import (
 
 // Results is used to return client results / errors on websocket pushes
 type Results struct {
-	Err     error       `json:"error"`
+	ErrMsg  string      `json:"error"`
 	Payload interface{} `json:"payload"`
 }
 
