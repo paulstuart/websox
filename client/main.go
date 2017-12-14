@@ -62,23 +62,24 @@ func main() {
 	}
 }
 
-func gotIt(r io.Reader) (bool, error) {
+func gotIt(r io.Reader) (interface{}, bool, error) {
 	var s websox.Stuff
 	ok := true
 	if err := json.NewDecoder(r).Decode(&s); err != nil {
 		fmt.Println("json error:", err)
-		return ok, err
+		return nil, ok, err
 	}
 	fmt.Println("Stuff count:", s.Count)
 	three := s.Count%3 == 0
 	five := s.Count%5 == 0
+	var err error
 	switch {
 	case three && five:
-		return ok, fmt.Errorf("fizzbuzz")
+		err = fmt.Errorf("fizzbuzz")
 	case three:
-		return ok, fmt.Errorf("fizz")
+		err = fmt.Errorf("fizz")
 	case five:
-		return ok, fmt.Errorf("buzz")
+		err = fmt.Errorf("buzz")
 	}
-	return ok, nil
+	return nil, ok, err
 }
