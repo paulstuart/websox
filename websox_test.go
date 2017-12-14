@@ -34,7 +34,7 @@ func TestServer(t *testing.T) {
 func TestPusher(t *testing.T) {
 	expires := time.Second * 86400
 	ping := time.Second * 3600
-	ts := httptest.NewServer(http.HandlerFunc(Pusher(fakeLoop, expires, ping)))
+	ts := httptest.NewServer(http.HandlerFunc(Pusher(FakeLoop, expires, ping)))
 	//ts := httptest.NewServer(http.HandlerFunc(Pusher(fakeSend, expires, ping)))
 	defer ts.Close()
 
@@ -63,37 +63,6 @@ func fakeSend() (chan interface{}, chan Results) {
 			fmt.Println("fakeloop got error:", results.ErrMsg)
 		}
 		log.Println("fakeSend is closing")
-		close(getter)
-	}()
-
-	return getter, teller
-}
-
-func fakeLoop() (chan interface{}, chan Results) {
-	var i int
-
-	getter := make(chan interface{})
-	teller := make(chan Results)
-
-	go func() {
-		for {
-			i++
-
-			getter <- Stuff{
-				Msg:   fmt.Sprintf("msg number: %d", i),
-				Count: i,
-				TS:    time.Now(),
-			}
-			results, ok := <-teller
-			if !ok {
-				fmt.Println("teller must be closed")
-				break
-			}
-			if false && len(results.ErrMsg) > 0 {
-				fmt.Println("fakeloop got error:", results.ErrMsg)
-			}
-		}
-		log.Println("fakeLoop is closing")
 		close(getter)
 	}()
 

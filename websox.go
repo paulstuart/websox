@@ -7,6 +7,8 @@
 package websox
 
 import (
+	"fmt"
+	"log"
 	"time"
 )
 
@@ -21,4 +23,36 @@ type Stuff struct {
 	Msg   string    `json:"msg"`
 	Count int       `json:"count"`
 	TS    time.Time `json:"timestamp"`
+}
+
+// FakeLoop is a sample Actionable function for testing
+func FakeLoop() (chan interface{}, chan Results) {
+	var i int
+
+	getter := make(chan interface{})
+	teller := make(chan Results)
+
+	go func() {
+		for {
+			i++
+
+			getter <- Stuff{
+				Msg:   fmt.Sprintf("msg number: %d", i),
+				Count: i,
+				TS:    time.Now(),
+			}
+			results, ok := <-teller
+			if !ok {
+				fmt.Println("teller must be closed")
+				break
+			}
+			if false && len(results.ErrMsg) > 0 {
+				fmt.Println("Fakeloop got error:", results.ErrMsg)
+			}
+		}
+		log.Println("FakeLoop is closing")
+		close(getter)
+	}()
+
+	return getter, teller
 }
