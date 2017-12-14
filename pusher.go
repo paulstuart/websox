@@ -59,8 +59,8 @@ func Pusher(setup Setup, expires, pingFreq time.Duration) http.HandlerFunc {
 			results := <-teller
 			logger.Println("closing teller - app startup failure")
 			close(teller)
-			logger.Println("Pusher setup error:", results.Err)
-			http.Error(w, results.Err.Error(), http.StatusInternalServerError)
+			logger.Println("Pusher setup error:", results.ErrMsg)
+			http.Error(w, results.ErrMsg, http.StatusInternalServerError)
 			return
 		}
 
@@ -148,8 +148,8 @@ func Pusher(setup Setup, expires, pingFreq time.Duration) http.HandlerFunc {
 
 				var results Results
 				if err := json.Unmarshal(message, &results); err != nil {
-					logger.Println("status json error:", err)
-					teller <- Results{Err: err}
+					logger.Println("status json data:", string(message), "error:", err)
+					teller <- Results{ErrMsg: err.Error()}
 					continue
 				}
 
@@ -182,7 +182,7 @@ func Pusher(setup Setup, expires, pingFreq time.Duration) http.HandlerFunc {
 					break loop
 				}
 				if err := send(stuff); err != nil {
-					teller <- Results{Err: err}
+					teller <- Results{ErrMsg: err.Error()}
 				}
 			}
 		}
