@@ -14,6 +14,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/gorilla/websocket"
 	"github.com/pkg/errors"
@@ -27,8 +28,10 @@ type Actionable func(io.Reader) (interface{}, bool, error)
 
 // Client will connect to url and apply the Actionable function to each message recieved
 func Client(url string, fn Actionable, pings bool, headers http.Header) error {
+	if strings.HasPrefix(url, "http") {
+		url = "ws" + url[4:]
+	}
 	log.Printf("connecting to %s", url)
-
 	conn, resp, err := websocket.DefaultDialer.Dial(url, headers)
 	if err != nil {
 		if resp != nil {
@@ -107,8 +110,12 @@ func Client(url string, fn Actionable, pings bool, headers http.Header) error {
 		}
 		z.Close()
 
+		var errMsg string
+		if err != nil {
+			errMsg = err.Error()
+		}
 		results := Results{
-			Err:     err,
+			ErrMsg:  errMsg,
 			Payload: reply,
 		}
 
