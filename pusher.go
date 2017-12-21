@@ -71,8 +71,11 @@ func Pusher(setup Setup, expires, pingFreq time.Duration) http.HandlerFunc {
 			return
 		}
 
+		sending, reading := true, true
+
 		closeHandler := conn.CloseHandler()
 		conn.SetCloseHandler(func(code int, text string) error {
+			sending = false
 			log.Printf("got close code: %d text: %s\n", code, text)
 			if closeHandler != nil {
 				logger.Println("calling original closeHandler")
@@ -125,14 +128,15 @@ func Pusher(setup Setup, expires, pingFreq time.Duration) http.HandlerFunc {
 		}
 
 		quit := make(chan struct{})
-
 		go func() {
-			for {
+			for reading {
+				logger.Println("waiting for reply")
 				messageType, message, err := conn.ReadMessage()
 				if err != nil {
 					logger.Println("pusher read error:", err)
 					break
 				}
+				logger.Println("we have a reply")
 
 				switch messageType {
 				case websocket.CloseMessage:
@@ -153,9 +157,11 @@ func Pusher(setup Setup, expires, pingFreq time.Duration) http.HandlerFunc {
 					continue
 				}
 
-				go func() {
-					teller <- results
-				}()
+				//go func() {
+				logger.Println("telling teller")
+				teller <- results
+				logger.Println("told teller")
+				//}()
 			}
 			logger.Println("====> read loop complete")
 			quit <- struct{}{}
@@ -163,7 +169,7 @@ func Pusher(setup Setup, expires, pingFreq time.Duration) http.HandlerFunc {
 		}()
 
 	loop:
-		for {
+		for sending {
 			select {
 			case <-timeout:
 				logger.Println("session has expired")
@@ -177,15 +183,19 @@ func Pusher(setup Setup, expires, pingFreq time.Duration) http.HandlerFunc {
 					break loop
 				}
 			case stuff, ok := <-getter:
+				logger.Println("getter got stuff")
 				if !ok {
 					logger.Println("getter is closed")
 					break loop
 				}
+				logger.Println("sending stuff")
 				if err := send(stuff); err != nil {
+					logger.Println("error sending stuff:", err)
 					teller <- Results{ErrMsg: err.Error()}
 				}
 			}
 		}
+		reading = false
 		logger.Println("websocket server closing")
 		err = conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
 		if err != nil {
@@ -195,5 +205,6 @@ func Pusher(setup Setup, expires, pingFreq time.Duration) http.HandlerFunc {
 		<-quit
 		logger.Println("close teller")
 		close(teller)
+		logger.Println("pusher done")
 	}
 }

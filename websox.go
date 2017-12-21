@@ -27,12 +27,12 @@ type Stuff struct {
 
 // FakeLoop is a sample Actionable function for testing
 func FakeLoop() (chan interface{}, chan Results) {
-	var i int
 
 	getter := make(chan interface{})
 	teller := make(chan Results)
 
 	go func() {
+		var i int
 		for {
 			i++
 
