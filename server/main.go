@@ -19,11 +19,13 @@ import (
 )
 
 var (
-	addr   *string
-	delay  *bool
-	mu     sync.Mutex
-	wg     sync.WaitGroup
-	locked bool
+	addr    *string
+	delay   *bool
+	mu      sync.Mutex
+	up      sync.RWMutex
+	wg      sync.WaitGroup
+	locked  bool
+	updated time.Time
 )
 
 func init() {
@@ -49,6 +51,19 @@ func lock(w http.ResponseWriter, r *http.Request) {
 	locked = !locked
 	fmt.Fprintln(w, "locked:", locked)
 	mu.Unlock()
+}
+
+func setLastContact() {
+	up.Lock()
+	updated = time.Now()
+	up.Unlock()
+}
+
+func getLastContact() time.Time {
+	up.RLock()
+	last := updated
+	up.RUnlock()
+	return last
 }
 
 func main() {
@@ -80,7 +95,7 @@ func main() {
 		"uaa_client_secret:", os.Getenv("uaa_client_secret"),
 		"uaa_url:", os.Getenv("uaa_url"),
 	)
-	http.HandleFunc("/push", valid.AuthorizationRequired(websox.Pusher(websox.FakeLoop, expires, pingPeriod)))
+	http.HandleFunc("/push", valid.AuthorizationRequired(websox.Pusher(websox.FakeLoop, expires, pingPeriod, setLastContact)))
 	http.HandleFunc("/lock", lock)
 	http.HandleFunc("/", home)
 

@@ -15,6 +15,7 @@ import (
 	"golang.org/x/oauth2/clientcredentials"
 )
 
+// Oauth2Header returns headers to access protected http endpoints
 func Oauth2Header(ctx context.Context, url, cid, secret string) (http.Header, error) {
 	tokenSource := MakeClientCredentialsTokenSource(ctx, url, cid, secret)
 	token, err := tokenSource.Token()
@@ -27,6 +28,7 @@ func Oauth2Header(ctx context.Context, url, cid, secret string) (http.Header, er
 	return header, nil
 }
 
+// MakeClientCredentialsTokenSource returns an oauth2 token source for validation
 func MakeClientCredentialsTokenSource(ctx context.Context, url, cid, secret string) oauth2.TokenSource {
 	conf := &clientcredentials.Config{
 		ClientID:     cid,
