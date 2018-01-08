@@ -7,6 +7,7 @@
 package websox
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"time"
@@ -14,8 +15,8 @@ import (
 
 // Results is used to return client results / errors on websocket pushes
 type Results struct {
-	ErrMsg  string      `json:"error"`
-	Payload interface{} `json:"payload"`
+	ErrMsg  string           `json:"error"`
+	Payload *json.RawMessage `json:"payload"`
 }
 
 // Stuff is a sample struct for testing

@@ -126,8 +126,16 @@ func Client(url string, fn Actionable, pings bool, headers http.Header) error {
 			errMsg = err.Error()
 		}
 		results := Results{
-			ErrMsg:  errMsg,
-			Payload: reply,
+			ErrMsg: errMsg,
+		}
+		if reply != nil {
+			b, err := json.Marshal(reply)
+			if err != nil {
+				log.Println("reply json error:", err)
+				continue
+			}
+			raw := json.RawMessage(b)
+			results.Payload = &raw
 		}
 
 		b, jerr := json.Marshal(results)
