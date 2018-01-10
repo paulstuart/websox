@@ -95,7 +95,7 @@ func main() {
 		"uaa_client_secret:", os.Getenv("uaa_client_secret"),
 		"uaa_url:", os.Getenv("uaa_url"),
 	)
-	http.HandleFunc("/push", valid.AuthorizationRequired(websox.Pusher(websox.FakeLoop, expires, pingPeriod, setLastContact)))
+	http.HandleFunc("/push", valid.AuthorizationRequired(websox.Pusher(websox.FakeLoop, expires, pingPeriod, setLastContact, nil)))
 	http.HandleFunc("/lock", lock)
 	http.HandleFunc("/", home)
 

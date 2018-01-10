@@ -53,7 +53,7 @@ func main() {
 		if err != nil {
 			panic(err)
 		}
-		err = websox.Client(u.String(), gotIt, true, headers)
+		err = websox.Client(u.String(), gotIt, true, headers, nil)
 		if !websocket.IsCloseError(err, websocket.CloseNormalClosure) {
 			fmt.Printf("(%T) %v\n", err, err)
 		}

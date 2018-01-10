@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	//	"io/ioutil"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"net/http/httptest"
@@ -17,53 +17,35 @@ import (
 var (
 	testExpires = time.Second * 86400
 	testPing    = time.Second * 3600
+	logger      = log.New(ioutil.Discard, "", 0)
 )
 
+func init() {
+	if testing.Verbose() {
+		logger = nil
+	}
+}
+
+// TestPusher just does a simple send
 func TestPusher(t *testing.T) {
 	expires := time.Second * 86400
 	ping := time.Second * 3600
-	ts := httptest.NewServer(http.HandlerFunc(Pusher(FakeLoop, expires, ping, nil)))
+	ts := httptest.NewServer(http.HandlerFunc(Pusher(FakeLoop, expires, ping, nil, logger)))
 	defer ts.Close()
 
-	if err := Client(ts.URL, gotIt, true, nil); err != nil {
+	if err := Client(ts.URL, gotIt, true, nil, logger); err != nil {
 		t.Fatal(err)
 	}
 }
 
+// TestSendFail tests if client fails
 func TestSendFail(t *testing.T) {
-	ts := httptest.NewServer(http.HandlerFunc(Pusher(sendFail(t), testExpires, testPing, nil)))
+	ts := httptest.NewServer(http.HandlerFunc(Pusher(sendFail(t), testExpires, testPing, nil, logger)))
 	defer ts.Close()
 
-	if err := Client(ts.URL, takeFail(t, 1, nil), true, nil); err != nil {
+	if err := Client(ts.URL, takeFail(t, 1, nil), true, nil, logger); err != nil {
 		t.Fatal(err)
 	}
-	/*
-			if err == nil {
-				t.Fatal("expected an error")
-			}
-		if err != expected {
-			t.Fatalf("expected: %v but got: %v", expected, err)
-		}
-	*/
-}
-
-/*
-func xTestClientExitError(t *testing.T) {
-	ts := httptest.NewServer(http.HandlerFunc(Pusher(FakeLoop, testExpires, testPing)))
-	defer ts.Close()
-
-	err := Client(ts.URL, gotErr, true, nil)
-	if err == nil {
-		t.Fatal("expected an error")
-	}
-	if err != expected {
-		t.Fatalf("expected: %v but got: %v", expected, err)
-	}
-}
-*/
-
-func gotErr(r io.Reader) (interface{}, bool, error) {
-	return nil, false, fmt.Errorf("this error was expected")
 }
 
 func TestTenSend(t *testing.T) {
@@ -73,7 +55,6 @@ func TestTenSend(t *testing.T) {
 
 	counter := func(r io.Reader) (interface{}, bool, error) {
 		count++
-		fmt.Println("GOT COUNT:", count)
 		t.Log("COUNT:", count)
 		return nil, true, nil
 	}
@@ -82,108 +63,91 @@ func TestTenSend(t *testing.T) {
 		getter := make(chan interface{})
 		teller := make(chan Results)
 		go func() {
-			fmt.Println("***** sendX limit:", limit)
 			for i := 0; i < limit; i++ {
-				fmt.Println("***** sendX to getter")
 				getter <- Stuff{
 					Msg:   fmt.Sprintf("msg number: %d", i),
 					Count: i,
 					TS:    time.Now(),
 				}
-				fmt.Println("***** sendX wait for results")
 				results, ok := <-teller
-				fmt.Println("***** sendX results:", results, "OK:", ok)
 				if !ok {
 					t.Fatal("teller must be closed")
 					break
 				}
-				fmt.Println("***** sendX continues")
 
 				if len(results.ErrMsg) > 0 {
 					t.Log("fakeloop got error:", results.ErrMsg)
 				}
-				fmt.Println("***** sendX end of loop")
 			}
-			fmt.Println("***** sendX is closing")
-			t.Logf("sendX is closing")
 			close(getter)
 		}()
 
 		return getter, teller
 	}
 
-	ts := httptest.NewServer(http.HandlerFunc(Pusher(sender, testExpires, testPing, nil)))
+	ts := httptest.NewServer(http.HandlerFunc(Pusher(sender, testExpires, testPing, nil, logger)))
 	defer ts.Close()
 
-	if err := Client(ts.URL, counter, true, nil); err != nil {
+	if err := Client(ts.URL, counter, true, nil, logger); err != nil {
 		t.Fatal("unexpected error:", err)
 	}
-	/*
-		if websocket.IsUnexpectedCloseError(err, 1000) {
-			t.Fatalf("unexpected error: %v", err)
-			log.Println("websocket close error:", err)
-		}
-	*/
 	if count != limit {
 		t.Fatalf("expected: %d but got: %d", limit, count)
 	}
 }
 
 func TestTenToOne(t *testing.T) {
-	ts := httptest.NewServer(http.HandlerFunc(Pusher(sendX(t, 10), testExpires, testPing, nil)))
+	ts := httptest.NewServer(http.HandlerFunc(Pusher(sendX(t, 10), testExpires, testPing, nil, logger)))
 	defer ts.Close()
 
-	if err := Client(ts.URL, gotIt, true, nil); err != nil {
+	if err := Client(ts.URL, gotIt, true, nil, logger); err != nil {
 		t.Fatal("unexpected error:", err)
 	}
 }
 
 func TestFivers(t *testing.T) {
-	ts := httptest.NewServer(http.HandlerFunc(Pusher(sendX(t, 10), testExpires, testPing, nil)))
+	ts := httptest.NewServer(http.HandlerFunc(Pusher(sendX(t, 10), testExpires, testPing, nil, logger)))
 	defer ts.Close()
 
-	if err := Client(ts.URL, takeX(t, 5, nil), true, nil); err != nil {
+	if err := Client(ts.URL, takeX(t, 5, nil), true, nil, logger); err != nil {
 		t.Fatal("unexpected error:", err)
 	}
-	if err := Client(ts.URL, takeX(t, 5, nil), true, nil); err != nil {
+	if err := Client(ts.URL, takeX(t, 5, nil), true, nil, logger); err != nil {
 		t.Fatal("unexpected error:", err)
 	}
-	if err := Client(ts.URL, takeX(t, 5, nil), true, nil); err != nil {
+	if err := Client(ts.URL, takeX(t, 5, nil), true, nil, logger); err != nil {
 		t.Fatal("unexpected error:", err)
 	}
 }
 
 func sendX(t *testing.T, limit int) Setup {
-	t.Log("sendX invoked")
-	fmt.Println("***** sendX invoked")
+	t.Log("sendX invoked, limit:", limit)
 	return func() (chan interface{}, chan Results) {
 		t.Log("sendX started")
 		getter := make(chan interface{})
 		teller := make(chan Results)
 		go func() {
-			fmt.Println("***** sendX limit:", limit)
 			for i := 0; i < limit; i++ {
-				fmt.Println("***** sendX to getter")
+				t.Log("***** sendX to getter")
 				getter <- Stuff{
 					Msg:   fmt.Sprintf("msg number: %d", i),
 					Count: i,
 					TS:    time.Now(),
 				}
-				fmt.Println("***** sendX wait for results")
+				t.Log("***** sendX wait for results")
 				results, ok := <-teller
-				fmt.Println("***** sendX results:", results, "OK:", ok)
+				t.Log("***** sendX results:", results, "OK:", ok)
 				if !ok {
 					//t.Fatal("teller must be closed")
 					break
 				}
-				fmt.Println("***** sendX continues")
+				t.Log("***** sendX continues")
 
 				if len(results.ErrMsg) > 0 {
 					t.Log("fakeloop got error:", results.ErrMsg)
 				}
-				fmt.Println("***** sendX end of loop")
+				t.Log("***** sendX end of loop")
 			}
-			fmt.Println("***** sendX is closing")
 			t.Logf("sendX is closing")
 			close(getter)
 		}()
@@ -249,6 +213,7 @@ func sendTen() (chan interface{}, chan Results) {
 }
 */
 
+/*
 func fakeSend() (chan interface{}, chan Results) {
 	var i int
 
@@ -274,6 +239,7 @@ func fakeSend() (chan interface{}, chan Results) {
 
 	return getter, teller
 }
+*/
 
 func gotIt(r io.Reader) (interface{}, bool, error) {
 	var s Stuff
@@ -282,7 +248,6 @@ func gotIt(r io.Reader) (interface{}, bool, error) {
 		fmt.Println("json error:", err)
 		return nil, false, err
 	}
-	fmt.Println("Stuff count:", s.Count)
 	three := s.Count%3 == 0
 	five := s.Count%5 == 0
 	switch {
@@ -332,7 +297,6 @@ func TestNoAnswer(t *testing.T) {
 
 	receiver := func(r io.Reader) (interface{}, bool, error) {
 		received = true
-		fmt.Println("RECEIVED")
 		return fmt.Errorf("received and filed"), false, fmt.Errorf("forced error")
 	}
 	sender := func() (chan interface{}, chan Results) {
@@ -340,114 +304,33 @@ func TestNoAnswer(t *testing.T) {
 		getter := make(chan interface{})
 		teller := make(chan Results)
 		go func() {
-			fmt.Println("***** noAnswer begins")
-			fmt.Println("***** noAnswer to getter")
+			t.Log("***** noAnswer begins")
 			getter <- Stuff{
 				Msg:   fmt.Sprintf("msg number: %d", 1),
 				Count: 1,
 				TS:    time.Now(),
 			}
-			fmt.Println("***** noAnswer wait for results")
+			t.Log("***** noAnswer wait for results")
 			results, ok := <-teller
-			fmt.Println("***** noAnswer TELLER results:", results, "OK:", ok)
+			t.Log("***** noAnswer TELLER results:", results, "OK:", ok)
 			if !ok {
 				fmt.Println("teller must be closed")
 				t.Fatal("teller must be closed")
 			}
-			fmt.Println("noAnswer got error:", results.ErrMsg)
-
-			fmt.Println("***** noAnswer is closing")
-			t.Logf("noAnswer is closing")
+			t.Log("noAnswer got error:", results.ErrMsg)
 			close(getter)
 		}()
 
 		return getter, teller
 	}
 
-	//ts := httptest.NewServer(http.HandlerFunc(Pusher(sendX(t, limit), testExpires, testPing)))
-	ts := httptest.NewServer(http.HandlerFunc(Pusher(sender, testExpires, testPing, nil)))
+	ts := httptest.NewServer(http.HandlerFunc(Pusher(sender, testExpires, testPing, nil, logger)))
 	defer ts.Close()
 
-	//if err := BadClient(ts.URL, receiver, true, nil); err != nil {
-	if err := Client(ts.URL, receiver, true, nil); err != nil {
+	if err := Client(ts.URL, receiver, true, nil, logger); err != nil {
 		t.Fatal("unexpected error:", err)
 	}
-	/*
-			if websocket.IsUnexpectedCloseError(err, 1000) {
-				t.Fatalf("unexpected error: %v", err)
-				log.Println("websocket close error:", err)
-			}
-		if count != limit {
-			t.Fatalf("expected: %d but got: %d", limit, count)
-		}
-	*/
 }
-
-/*
-var BadClient = makeClient(badHandler)
-// BadClient will connect to url and apply the Actionable function to each message recieved
-func BadClient(url string, fn Actionable, pings bool, headers http.Header) error {
-	if strings.HasPrefix(url, "http") {
-		url = "ws" + url[4:]
-	}
-	log.Printf("connecting to %s", url)
-	conn, resp, err := websocket.DefaultDialer.Dial(url, headers)
-	if err != nil {
-		if resp != nil {
-			if resp.Body != nil {
-				io.Copy(os.Stdout, resp.Body)
-			}
-			return errors.Wrapf(err, "dial code:%d status:%s", resp.StatusCode, resp.Status)
-		}
-		return errors.Wrap(err, "websocket dial error for url: "+url)
-	}
-
-	log.Printf("connected to %s", url)
-
-	log.Println("client waiting for message")
-	messageType, r, err := conn.NextReader()
-	if err != nil {
-		if err != nil && websocket.IsCloseError(err, 1000) {
-			return nil
-		}
-		log.Println("NextReader error:", err)
-		return err
-	}
-
-	switch messageType {
-	case websocket.CloseMessage:
-		log.Println("uhoh! closing time!")
-		return nil
-	case websocket.PingMessage:
-		log.Println("PING!")
-		return nil
-	case websocket.PongMessage:
-		log.Println("PONG!")
-		return nil
-	}
-
-	if messageType != websocket.BinaryMessage {
-		log.Printf("UNKNOWN MSG (%T):", messageType)
-		io.Copy(os.Stdout, r)
-		continue
-	}
-
-	// decompress the message before the function sees it
-	var reply interface{}
-	z, err := zlib.NewReader(r)
-	if err == nil {
-		reply, ok, err = fn(z)
-		if err != nil {
-			log.Println("ok:", ok, "fn err:", err)
-		}
-	}
-	z.Close()
-	fmt.Printf("=====> REPLY (%T): %v\n", reply, reply)
-
-	fmt.Println("client returning error:", err)
-	return err
-}
-*/
 
 func badHandler(conn *websocket.Conn, fn Actionable) error {
 	log.Println("===> badHandler waiting for message")
@@ -472,7 +355,6 @@ func (b badjson) MarshalJSON() ([]byte, error) {
 }
 
 func badAction(r io.Reader) (interface{}, bool, error) {
-	fmt.Println("BADACTION RECEIVED")
 	return badjson{}, false, fmt.Errorf("badAction error")
 }
 
@@ -482,8 +364,7 @@ func TestBadAction(t *testing.T) {
 		getter := make(chan interface{})
 		teller := make(chan Results)
 		go func() {
-			fmt.Println("***** **BadAction** begins")
-			fmt.Println("***** **BadAction** to getter")
+			t.Log("***** **BadAction** begins")
 			getter <- Stuff{
 				Msg:   fmt.Sprintf("msg number: %d", 1),
 				Count: 1,
@@ -494,28 +375,21 @@ func TestBadAction(t *testing.T) {
 			t.Log("***** **BadAction** TELLER results:", results, "OK:", ok)
 			if !ok {
 				t.Log("teller must be closed")
-				//t.Fatal("teller must be closed")
 			}
-			fmt.Println("**BadAction** got error:", results.ErrMsg)
-
-			t.Logf("**BadAction** is closing")
+			t.Log("**BadAction** got error:", results.ErrMsg)
 			close(getter)
 		}()
 
 		return getter, teller
 	}
 
-	//ts := httptest.NewServer(http.HandlerFunc(Pusher(sendX(t, limit), testExpires, testPing)))
-	ts := httptest.NewServer(http.HandlerFunc(Pusher(sender, testExpires, testPing, nil)))
+	ts := httptest.NewServer(http.HandlerFunc(Pusher(sender, testExpires, testPing, nil, logger)))
 	defer ts.Close()
 
-	if err := Client(ts.URL, badAction, true, nil); err != nil {
+	if err := Client(ts.URL, badAction, true, nil, logger); err != nil {
 		t.Fatal("unexpected error:", err)
 	}
-	fmt.Println("BadAction complete")
 }
-
-// Client takes one record w/o errors
 
 func TestSingleOk(t *testing.T) {
 
@@ -524,35 +398,27 @@ func TestSingleOk(t *testing.T) {
 
 	receiver := func(r io.Reader) (interface{}, bool, error) {
 		counter++
-		//fmt.Println("RECEIVED")
 		return nil, false, nil
 	}
 
 	done := make(chan bool)
 	sender := func() (chan interface{}, chan Results) {
-		//t.Log("SINGLE started")
+		t.Log("SingleOk started")
 		getter := make(chan interface{}, 1)
 		teller := make(chan Results)
 		go func() {
-			//fmt.Println("***** SINGLE begins")
 			for i := 0; i < limit; i++ {
-				//fmt.Println("***** SINGLE to getter")
 				getter <- Stuff{
 					Msg:   fmt.Sprintf("msg number: %d", i),
 					Count: i,
 					TS:    time.Now(),
 				}
-				//fmt.Println("***** SINGLE wait for results")
 				_, ok := <-teller
-				//fmt.Println("***** SINGLE TELLER results:", results, "OK:", ok)
 				if !ok {
-					//fmt.Println("teller must be closed")
 					break
 				}
-				//fmt.Println("SINGLE got error:", results.ErrMsg)
 			}
-			//fmt.Println("***** SINGLE is closing")
-			//t.Logf("SINGLE is closing")
+			t.Logf("SingleOk is closing")
 			close(getter)
 			done <- true
 		}()
@@ -560,10 +426,10 @@ func TestSingleOk(t *testing.T) {
 		return getter, teller
 	}
 
-	ts := httptest.NewServer(http.HandlerFunc(Pusher(sender, testExpires, testPing, nil)))
+	ts := httptest.NewServer(http.HandlerFunc(Pusher(sender, testExpires, testPing, nil, logger)))
 	defer ts.Close()
 
-	if err := Client(ts.URL, receiver, true, nil); err != nil {
+	if err := Client(ts.URL, receiver, true, nil, logger); err != nil {
 		t.Fatal("unexpected error:", err)
 	}
 
@@ -571,5 +437,5 @@ func TestSingleOk(t *testing.T) {
 	if counter != 1 {
 		t.Fatalf("counter is: %d -- expected: %d", counter, 1)
 	}
-	//fmt.Println("SINGLE complete")
+	t.Log("SingleOk complete")
 }

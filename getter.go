@@ -28,8 +28,15 @@ type Actionable func(io.Reader) (interface{}, bool, error)
 const logFlags = log.Ldate | log.Lmicroseconds | log.Lshortfile
 
 // Client will connect to url and apply the Actionable function to each message recieved
-func Client(url string, fn Actionable, pings bool, headers http.Header) error {
-	logger := log.New(os.Stderr, "client ", logFlags)
+// url specifices the websocket endpoint to connect to
+// pings will log websocket pings if set true
+// headers supplies http headers for authentication
+// logger logs actions
+func Client(url string, fn Actionable, pings bool, headers http.Header, logger *log.Logger) error {
+	if logger == nil {
+		return errors.New("logger is nil")
+		logger = log.New(os.Stderr, "client ", logFlags)
+	}
 	if strings.HasPrefix(url, "http") {
 		url = "ws" + url[4:]
 	}
@@ -131,7 +138,7 @@ func Client(url string, fn Actionable, pings bool, headers http.Header) error {
 		if reply != nil {
 			b, err := json.Marshal(reply)
 			if err != nil {
-				log.Println("reply json error:", err)
+				logger.Println("reply json error:", err)
 				continue
 			}
 			raw := json.RawMessage(b)
@@ -140,7 +147,7 @@ func Client(url string, fn Actionable, pings bool, headers http.Header) error {
 
 		b, jerr := json.Marshal(results)
 		if jerr != nil {
-			log.Println("status json error:", jerr)
+			logger.Println("status json error:", jerr)
 			continue
 		}
 
@@ -149,6 +156,6 @@ func Client(url string, fn Actionable, pings bool, headers http.Header) error {
 		}
 		logger.Println("replied results:", results)
 	}
-	log.Println("client returning error:", err)
+	logger.Println("client returning error:", err)
 	return err
 }

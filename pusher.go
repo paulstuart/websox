@@ -46,11 +46,12 @@ type Setup func() (chan interface{}, chan Results)
 
 // Pusher gets send/recv channels from the setup function
 // and apply the channel data to a websocket connection
-func Pusher(setup Setup, expires, pingFreq time.Duration, contacted func()) http.HandlerFunc {
+func Pusher(setup Setup, expires, pingFreq time.Duration, contacted func(), logger *log.Logger) http.HandlerFunc {
 	const flags = log.Ldate | log.Lmicroseconds | log.Lshortfile
 	return func(w http.ResponseWriter, r *http.Request) {
-		logger := log.New(os.Stderr, pusherID(), flags)
-
+		if logger == nil {
+			logger = log.New(os.Stderr, pusherID(), flags)
+		}
 		getter, teller := setup()
 		if getter == nil {
 			results := <-teller
@@ -64,7 +65,7 @@ func Pusher(setup Setup, expires, pingFreq time.Duration, contacted func()) http
 		upgrader := websocket.Upgrader{} // use default options
 		conn, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
-			log.Print("push upgrade error:", err)
+			logger.Print("push upgrade error:", err)
 			return
 		}
 
@@ -77,7 +78,7 @@ func Pusher(setup Setup, expires, pingFreq time.Duration, contacted func()) http
 		closeHandler := conn.CloseHandler()
 		conn.SetCloseHandler(func(code int, text string) error {
 			quit <- struct{}{}
-			log.Printf("got close code: %d text: %s\n", code, text)
+			logger.Printf("got close code: %d text: %s\n", code, text)
 			if closeHandler != nil {
 				logger.Println("calling original closeHandler")
 				return closeHandler(code, text)
