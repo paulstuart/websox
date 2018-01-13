@@ -68,7 +68,7 @@ func getLastContact() time.Time {
 
 func main() {
 	flag.Parse()
-	log.SetFlags(0)
+	logger := log.New(os.Stderr, "", log.LstdFlags)
 
 	period := os.Getenv("ping_period")
 	pingPeriod, err := time.ParseDuration(period)
@@ -89,16 +89,16 @@ func main() {
 		}
 	}
 
-	log.Println("setting up http handlers")
-	log.Println(
+	logger.Println("setting up http handlers")
+	logger.Println(
 		"uaa_client_id:", os.Getenv("uaa_client_id"),
 		"uaa_client_secret:", os.Getenv("uaa_client_secret"),
 		"uaa_url:", os.Getenv("uaa_url"),
 	)
-	http.HandleFunc("/push", valid.AuthorizationRequired(websox.Pusher(websox.FakeLoop, expires, pingPeriod, setLastContact, nil)))
+	http.HandleFunc("/push", valid.AuthorizationRequired(websox.Pusher(websox.MakeFake(logger), expires, pingPeriod, setLastContact, nil)))
 	http.HandleFunc("/lock", lock)
 	http.HandleFunc("/", home)
 
-	log.Println("listening on:", *addr)
-	log.Fatal(http.ListenAndServe(*addr, nil))
+	logger.Println("listening on:", *addr)
+	logger.Fatal(http.ListenAndServe(*addr, nil))
 }

@@ -47,10 +47,10 @@ type Setup func() (chan interface{}, chan Results)
 // Pusher gets send/recv channels from the setup function
 // and apply the channel data to a websocket connection
 func Pusher(setup Setup, expires, pingFreq time.Duration, contacted func(), logger *log.Logger) http.HandlerFunc {
-	const flags = log.Ldate | log.Lmicroseconds | log.Lshortfile
+	const logFlags = log.Ldate | log.Lmicroseconds | log.Lshortfile
 	return func(w http.ResponseWriter, r *http.Request) {
 		if logger == nil {
-			logger = log.New(os.Stderr, pusherID(), flags)
+			logger = log.New(os.Stderr, pusherID(), logFlags)
 		}
 		getter, teller := setup()
 		if getter == nil {
@@ -74,6 +74,7 @@ func Pusher(setup Setup, expires, pingFreq time.Duration, contacted func(), logg
 		}
 
 		quit := make(chan struct{})
+		complete := make(chan struct{})
 
 		closeHandler := conn.CloseHandler()
 		conn.SetCloseHandler(func(code int, text string) error {
@@ -166,6 +167,7 @@ func Pusher(setup Setup, expires, pingFreq time.Duration, contacted func(), logg
 				logger.Println("telling teller")
 				teller <- results
 				logger.Println("told teller")
+				complete <- struct{}{}
 			}
 			logger.Println("====> read loop complete")
 			quit <- struct{}{}
@@ -175,6 +177,8 @@ func Pusher(setup Setup, expires, pingFreq time.Duration, contacted func(), logg
 	loop:
 		for {
 			select {
+			case <-complete:
+				logger.Println("read complete")
 			case <-timeout:
 				logger.Println("session has expired")
 				break loop
@@ -192,9 +196,9 @@ func Pusher(setup Setup, expires, pingFreq time.Duration, contacted func(), logg
 					logger.Println("getter is closed")
 					break loop
 				}
-				logger.Println("sending stuff")
+				logger.Println("getter sending stuff")
 				if err := send(stuff); err != nil {
-					logger.Println("error sending stuff:", err)
+					logger.Println("getter error sending stuff:", err)
 					teller <- Results{ErrMsg: err.Error()}
 				}
 			}

@@ -26,34 +26,36 @@ type Stuff struct {
 	TS    time.Time `json:"timestamp"`
 }
 
-// FakeLoop is a sample Actionable function for testing
-func FakeLoop() (chan interface{}, chan Results) {
+// MakeFake returns a sample Actionable function for testing
+func MakeFake(logger *log.Logger) Setup {
+	return func() (chan interface{}, chan Results) {
 
-	getter := make(chan interface{})
-	teller := make(chan Results)
+		getter := make(chan interface{})
+		teller := make(chan Results)
 
-	go func() {
-		var i int
-		for {
-			i++
+		go func() {
+			var i int
+			for {
+				i++
 
-			getter <- Stuff{
-				Msg:   fmt.Sprintf("msg number: %d", i),
-				Count: i,
-				TS:    time.Now(),
+				getter <- Stuff{
+					Msg:   fmt.Sprintf("msg number: %d", i),
+					Count: i,
+					TS:    time.Now(),
+				}
+				results, ok := <-teller
+				if !ok {
+					logger.Println("teller must be closed")
+					break
+				}
+				if false && len(results.ErrMsg) > 0 {
+					logger.Println("Fakeloop got error:", results.ErrMsg)
+				}
 			}
-			results, ok := <-teller
-			if !ok {
-				fmt.Println("teller must be closed")
-				break
-			}
-			if false && len(results.ErrMsg) > 0 {
-				fmt.Println("Fakeloop got error:", results.ErrMsg)
-			}
-		}
-		log.Println("FakeLoop is closing")
-		close(getter)
-	}()
+			logger.Println("FakeLoop is closing")
+			close(getter)
+		}()
 
-	return getter, teller
+		return getter, teller
+	}
 }
