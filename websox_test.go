@@ -2,12 +2,14 @@ package websox
 
 import (
 	"encoding/json"
+	"flag"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 	"time"
 
@@ -17,12 +19,12 @@ import (
 var (
 	testExpires = time.Second * 86400
 	testPing    = time.Second * 3600
-	logger      = log.New(ioutil.Discard, "", 0)
+	logger      = log.New(ioutil.Discard, "", logFlags)
 )
 
-func init() {
+func testingSetup() {
 	if testing.Verbose() {
-		logger = nil
+		logger.SetOutput(os.Stdout)
 	}
 }
 
@@ -30,7 +32,7 @@ func init() {
 func TestPusher(t *testing.T) {
 	expires := time.Second * 86400
 	ping := time.Second * 3600
-	ts := httptest.NewServer(http.HandlerFunc(Pusher(FakeLoop, expires, ping, nil, logger)))
+	ts := httptest.NewServer(http.HandlerFunc(Pusher(MakeFake(logger), expires, ping, nil, logger)))
 	defer ts.Close()
 
 	if err := Client(ts.URL, gotIt, true, nil, logger); err != nil {
@@ -438,4 +440,39 @@ func TestSingleOk(t *testing.T) {
 		t.Fatalf("counter is: %d -- expected: %d", counter, 1)
 	}
 	t.Log("SingleOk complete")
+}
+
+// TestTimeout tests handling of a connection close because of session timeout
+func TestTimeout(t *testing.T) {
+	expires := time.Second * 5
+	ping := time.Second * 3600
+	ts := httptest.NewServer(http.HandlerFunc(Pusher(MakeFake(logger), expires, ping, nil, logger)))
+	defer ts.Close()
+
+	if err := Client(ts.URL, sleeper(logger, time.Second*10), true, nil, logger); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func sleeper(logger *log.Logger, d time.Duration) func(r io.Reader) (interface{}, bool, error) {
+	return func(r io.Reader) (interface{}, bool, error) {
+		var s Stuff
+		ok := false
+		if err := json.NewDecoder(r).Decode(&s); err != nil {
+			fmt.Println("json error:", err)
+			return nil, false, err
+		}
+		logger.Println("sleep for:", d)
+		time.Sleep(d)
+		logger.Println("done sleeping")
+		return nil, ok, nil
+	}
+}
+
+func TestMain(m *testing.M) {
+	flag.Parse()
+	testingSetup()
+	retCode := m.Run()
+	//testingTeardown()
+	os.Exit(retCode)
 }
