@@ -41,7 +41,7 @@ func pusherID() string {
 // If the setup function cannot do the required processing,
 // it should return a nil interface channel and send an error message in the error channel
 //
-// The error channel is closed by Pusher() when it id done processing (due to timeout or error)
+// The Results channel is closed by Pusher() when it is done processing (due to session timeout or error)
 type Setup func() (chan interface{}, chan Results)
 
 // Pusher gets send/recv channels from the setup function
@@ -127,11 +127,6 @@ func Pusher(setup Setup, expires, pingFreq time.Duration, contacted func(), logg
 			return w.Close()
 		}
 
-		timeout := make(<-chan time.Time)
-		if expires != 0 {
-			timeout = time.NewTimer(expires).C
-		}
-
 		go func() {
 			for {
 				logger.Println("waiting for reply")
@@ -174,14 +169,24 @@ func Pusher(setup Setup, expires, pingFreq time.Duration, contacted func(), logg
 			logger.Println("====> exiting read loop")
 		}()
 
+		expired := make(<-chan time.Time)
+		if expires != 0 {
+			expired = time.NewTimer(expires).C
+		}
+
+		active, open := false, true
+
 	loop:
-		for {
+		for open || active {
+			logger.Println("ACTIVE:", active, "OPEN:", open)
 			select {
 			case <-complete:
 				logger.Println("read complete")
-			case <-timeout:
+				active = false
+			case <-expired:
 				logger.Println("session has expired")
-				break loop
+				open = false
+				getter = nil // don't take anymore requests
 			case <-quit:
 				logger.Println("it's quitting time")
 				break loop
@@ -200,7 +205,9 @@ func Pusher(setup Setup, expires, pingFreq time.Duration, contacted func(), logg
 				if err := send(stuff); err != nil {
 					logger.Println("getter error sending stuff:", err)
 					teller <- Results{ErrMsg: err.Error()}
+					continue
 				}
+				active = true
 			}
 		}
 		logger.Println("websocket server closing")

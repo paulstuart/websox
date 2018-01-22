@@ -19,6 +19,7 @@ import (
 var (
 	testExpires = time.Second * 86400
 	testPing    = time.Second * 3600
+	testTimeout = time.Second * 1
 	logger      = log.New(ioutil.Discard, "", logFlags)
 )
 
@@ -61,7 +62,7 @@ func TestTenSend(t *testing.T) {
 		return nil, true, nil
 	}
 	sender := func() (chan interface{}, chan Results) {
-		t.Log("sendX started")
+		t.Log("sender started")
 		getter := make(chan interface{})
 		teller := make(chan Results)
 		go func() {
@@ -78,7 +79,7 @@ func TestTenSend(t *testing.T) {
 				}
 
 				if len(results.ErrMsg) > 0 {
-					t.Log("fakeloop got error:", results.ErrMsg)
+					t.Log("sender got error:", results.ErrMsg)
 				}
 			}
 			close(getter)
@@ -186,63 +187,6 @@ func sendFail(t *testing.T) Setup {
 	}
 }
 
-/*
-func sendTen() (chan interface{}, chan Results) {
-
-	getter := make(chan interface{})
-	teller := make(chan Results)
-
-	go func() {
-		for i := 0; i < 10; i++ {
-			getter <- Stuff{
-				Msg:   fmt.Sprintf("msg number: %d", i),
-				Count: i,
-				TS:    time.Now(),
-			}
-			results, ok := <-teller
-			if !ok {
-				fmt.Println("teller must be closed")
-			}
-			if false && len(results.ErrMsg) > 0 {
-				fmt.Println("fakeloop got error:", results.ErrMsg)
-			}
-		}
-		log.Println("sendTen is closing")
-		close(getter)
-	}()
-
-	return getter, teller
-}
-*/
-
-/*
-func fakeSend() (chan interface{}, chan Results) {
-	var i int
-
-	getter := make(chan interface{})
-	teller := make(chan Results)
-
-	go func() {
-		getter <- Stuff{
-			Msg:   fmt.Sprintf("msg number: %d", i),
-			Count: i,
-			TS:    time.Now(),
-		}
-		results, ok := <-teller
-		if !ok {
-			fmt.Println("teller must be closed")
-		}
-		if false && len(results.ErrMsg) > 0 {
-			fmt.Println("fakeloop got error:", results.ErrMsg)
-		}
-		log.Println("fakeSend is closing")
-		close(getter)
-	}()
-
-	return getter, teller
-}
-*/
-
 func gotIt(r io.Reader) (interface{}, bool, error) {
 	var s Stuff
 	ok := false
@@ -299,8 +243,9 @@ func TestNoAnswer(t *testing.T) {
 
 	receiver := func(r io.Reader) (interface{}, bool, error) {
 		received = true
-		return fmt.Errorf("received and filed"), false, fmt.Errorf("forced error")
+		return fmt.Errorf("received but not filed"), false, fmt.Errorf("receiver error")
 	}
+
 	sender := func() (chan interface{}, chan Results) {
 		t.Log("noAnswer started")
 		getter := make(chan interface{})
