@@ -33,7 +33,6 @@ const logFlags = log.Ldate | log.Lmicroseconds | log.Lshortfile
 // logger logs actions
 func Client(url string, fn Actionable, pings bool, headers http.Header, logger *log.Logger) error {
 	if logger == nil {
-		return errors.New("logger is nil")
 		logger = log.New(os.Stderr, "client ", logFlags)
 	}
 	if strings.HasPrefix(url, "http") {

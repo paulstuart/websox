@@ -29,10 +29,10 @@ type Stuff struct {
 	TS    time.Time `json:"timestamp"`
 }
 
+// ReadCloser is a convenience method for generating a ReadCloser representing the struct
 func (s Stuff) ReadCloser() io.ReadCloser {
 	var buff bytes.Buffer
-	enc := json.NewEncoder(&buff)
-	enc.Encode(s)
+	json.NewEncoder(&buff).Encode(s)
 	return ioutil.NopCloser(&buff)
 }
 
