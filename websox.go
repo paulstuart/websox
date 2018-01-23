@@ -7,8 +7,11 @@
 package websox
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
+	"io/ioutil"
 	"log"
 	"time"
 )
@@ -26,11 +29,18 @@ type Stuff struct {
 	TS    time.Time `json:"timestamp"`
 }
 
+func (s Stuff) ReadCloser() io.ReadCloser {
+	var buff bytes.Buffer
+	enc := json.NewEncoder(&buff)
+	enc.Encode(s)
+	return ioutil.NopCloser(&buff)
+}
+
 // MakeFake returns a sample Actionable function for testing
 func MakeFake(logger *log.Logger) Setup {
-	return func() (chan interface{}, chan Results) {
+	return func() (chan io.ReadCloser, chan Results) {
 
-		getter := make(chan interface{})
+		getter := make(chan io.ReadCloser)
 		teller := make(chan Results)
 
 		go func() {
@@ -38,11 +48,12 @@ func MakeFake(logger *log.Logger) Setup {
 			for {
 				i++
 
-				getter <- Stuff{
+				stuff := Stuff{
 					Msg:   fmt.Sprintf("msg number: %d", i),
 					Count: i,
 					TS:    time.Now(),
 				}
+				getter <- stuff.ReadCloser()
 				results, ok := <-teller
 				if !ok {
 					logger.Println("teller must be closed")

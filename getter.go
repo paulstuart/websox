@@ -7,7 +7,6 @@
 package websox
 
 import (
-	"compress/zlib"
 	"encoding/json"
 	"io"
 	"log"
@@ -117,16 +116,11 @@ func Client(url string, fn Actionable, pings bool, headers http.Header, logger *
 			continue
 		}
 
-		// decompress the message before the function sees it
 		var reply interface{}
-		z, err := zlib.NewReader(r)
-		if err == nil {
-			reply, ok, err = fn(z)
-			if err != nil {
-				logger.Println("ok:", ok, "fn err:", err)
-			}
+		reply, ok, err = fn(r)
+		if err != nil {
+			logger.Println("ok:", ok, "fn err:", err)
 		}
-		z.Close()
 
 		var errMsg string
 		if err != nil {

@@ -61,9 +61,9 @@ func TestTenSend(t *testing.T) {
 		t.Log("COUNT:", count)
 		return nil, true, nil
 	}
-	sender := func() (chan interface{}, chan Results) {
+	sender := func() (chan io.ReadCloser, chan Results) {
 		t.Log("sender started")
-		getter := make(chan interface{})
+		getter := make(chan io.ReadCloser)
 		teller := make(chan Results)
 		go func() {
 			for i := 0; i < limit; i++ {
@@ -71,7 +71,7 @@ func TestTenSend(t *testing.T) {
 					Msg:   fmt.Sprintf("msg number: %d", i),
 					Count: i,
 					TS:    time.Now(),
-				}
+				}.ReadCloser()
 				results, ok := <-teller
 				if !ok {
 					t.Fatal("teller must be closed")
@@ -125,9 +125,9 @@ func TestFivers(t *testing.T) {
 
 func sendX(t *testing.T, limit int) Setup {
 	t.Log("sendX invoked, limit:", limit)
-	return func() (chan interface{}, chan Results) {
+	return func() (chan io.ReadCloser, chan Results) {
 		t.Log("sendX started")
-		getter := make(chan interface{})
+		getter := make(chan io.ReadCloser)
 		teller := make(chan Results)
 		go func() {
 			for i := 0; i < limit; i++ {
@@ -136,7 +136,7 @@ func sendX(t *testing.T, limit int) Setup {
 					Msg:   fmt.Sprintf("msg number: %d", i),
 					Count: i,
 					TS:    time.Now(),
-				}
+				}.ReadCloser()
 				t.Log("***** sendX wait for results")
 				results, ok := <-teller
 				t.Log("***** sendX results:", results, "OK:", ok)
@@ -160,8 +160,8 @@ func sendX(t *testing.T, limit int) Setup {
 }
 
 func sendFail(t *testing.T) Setup {
-	return func() (chan interface{}, chan Results) {
-		getter := make(chan interface{})
+	return func() (chan io.ReadCloser, chan Results) {
+		getter := make(chan io.ReadCloser)
 		teller := make(chan Results)
 		go func() {
 			t.Log("sending Stuff")
@@ -169,7 +169,7 @@ func sendFail(t *testing.T) Setup {
 				Msg:   fmt.Sprintf("msg number: %d", 1),
 				Count: 1,
 				TS:    time.Now(),
-			}
+			}.ReadCloser()
 			t.Log("sent Stuff")
 			results, ok := <-teller
 			t.Log("sent results:", results)
@@ -246,9 +246,9 @@ func TestNoAnswer(t *testing.T) {
 		return fmt.Errorf("received but not filed"), false, fmt.Errorf("receiver error")
 	}
 
-	sender := func() (chan interface{}, chan Results) {
+	sender := func() (chan io.ReadCloser, chan Results) {
 		t.Log("noAnswer started")
-		getter := make(chan interface{})
+		getter := make(chan io.ReadCloser)
 		teller := make(chan Results)
 		go func() {
 			t.Log("***** noAnswer begins")
@@ -256,7 +256,7 @@ func TestNoAnswer(t *testing.T) {
 				Msg:   fmt.Sprintf("msg number: %d", 1),
 				Count: 1,
 				TS:    time.Now(),
-			}
+			}.ReadCloser()
 			t.Log("***** noAnswer wait for results")
 			results, ok := <-teller
 			t.Log("***** noAnswer TELLER results:", results, "OK:", ok)
@@ -306,9 +306,9 @@ func badAction(r io.Reader) (interface{}, bool, error) {
 }
 
 func TestBadAction(t *testing.T) {
-	sender := func() (chan interface{}, chan Results) {
+	sender := func() (chan io.ReadCloser, chan Results) {
 		t.Log("**BadAction** started")
-		getter := make(chan interface{})
+		getter := make(chan io.ReadCloser)
 		teller := make(chan Results)
 		go func() {
 			t.Log("***** **BadAction** begins")
@@ -316,7 +316,7 @@ func TestBadAction(t *testing.T) {
 				Msg:   fmt.Sprintf("msg number: %d", 1),
 				Count: 1,
 				TS:    time.Now(),
-			}
+			}.ReadCloser()
 			t.Log("***** **BadAction** wait for results")
 			results, ok := <-teller
 			t.Log("***** **BadAction** TELLER results:", results, "OK:", ok)
@@ -349,9 +349,9 @@ func TestSingleOk(t *testing.T) {
 	}
 
 	done := make(chan bool)
-	sender := func() (chan interface{}, chan Results) {
+	sender := func() (chan io.ReadCloser, chan Results) {
 		t.Log("SingleOk started")
-		getter := make(chan interface{}, 1)
+		getter := make(chan io.ReadCloser, 1)
 		teller := make(chan Results)
 		go func() {
 			for i := 0; i < limit; i++ {
@@ -359,7 +359,7 @@ func TestSingleOk(t *testing.T) {
 					Msg:   fmt.Sprintf("msg number: %d", i),
 					Count: i,
 					TS:    time.Now(),
-				}
+				}.ReadCloser()
 				_, ok := <-teller
 				if !ok {
 					break
