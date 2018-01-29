@@ -43,7 +43,7 @@ func Client(url string, fn Actionable, pings bool, headers http.Header, logger *
 	if err != nil {
 		if resp != nil {
 			if resp.Body != nil {
-				io.Copy(os.Stdout, resp.Body)
+				io.Copy(os.Stderr, resp.Body)
 			}
 			return errors.Wrapf(err, "dial code:%d status:%s", resp.StatusCode, resp.Status)
 		}
@@ -140,8 +140,7 @@ func Client(url string, fn Actionable, pings bool, headers http.Header, logger *
 
 		b, jerr := json.Marshal(results)
 		if jerr != nil {
-			logger.Println("status json error:", jerr)
-			continue
+			logger.Println("results status json error:", jerr)
 		}
 
 		if err := conn.WriteMessage(websocket.TextMessage, b); err != nil {
