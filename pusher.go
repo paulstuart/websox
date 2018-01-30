@@ -149,8 +149,7 @@ func Pusher(setup Setup, expires, pingFreq time.Duration, contacted func(), logg
 				var results Results
 				if err := json.Unmarshal(message, &results); err != nil {
 					logger.Println("status json data:", string(message), "error:", err)
-					teller <- Results{ErrMsg: err.Error()}
-					continue
+					results = Results{ErrMsg: err.Error()}
 				}
 
 				logger.Println("telling teller")
@@ -172,7 +171,7 @@ func Pusher(setup Setup, expires, pingFreq time.Duration, contacted func(), logg
 
 	loop:
 		for open || active {
-			logger.Println("ACTIVE:", active, "OPEN:", open)
+			// logger.Println("ACTIVE:", active, "OPEN:", open)
 			select {
 			case <-complete:
 				logger.Println("read complete")

@@ -389,12 +389,13 @@ func TestSingleOk(t *testing.T) {
 
 // TestTimeout tests handling of a connection close because of session timeout
 func TestTimeout(t *testing.T) {
-	expires := time.Second * 5
+	expires := time.Second * 1
+	sleep := expires * 2
 	ping := time.Second * 3600
 	ts := httptest.NewServer(http.HandlerFunc(Pusher(MakeFake(logger), expires, ping, nil, logger)))
 	defer ts.Close()
 
-	if err := Client(ts.URL, sleeper(logger, time.Second*10), true, nil, logger); err != nil {
+	if err := Client(ts.URL, sleeper(logger, sleep), true, nil, logger); err != nil {
 		t.Fatal(err)
 	}
 }
