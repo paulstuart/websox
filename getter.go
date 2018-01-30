@@ -48,7 +48,7 @@ func Client(url string, fn Actionable, pings bool, headers http.Header, logger *
 		})
 	}
 
-	return client(conn, fn, pings, logger)
+	return client(conn, fn, logger)
 }
 
 // client applies the Actionable function to the websocket connection
