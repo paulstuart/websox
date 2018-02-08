@@ -7,9 +7,9 @@
 package websox
 
 import (
-	"compress/zlib"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"net/http"
@@ -42,7 +42,7 @@ func pusherID() string {
 // it should return a nil interface channel and send an error message in the error channel
 //
 // The Results channel is closed by Pusher() when it is done processing (due to session timeout or error)
-type Setup func() (chan interface{}, chan Results)
+type Setup func() (chan io.ReadCloser, chan Results)
 
 // Pusher gets send/recv channels from the setup function
 // and apply the channel data to a websocket connection
@@ -105,26 +105,20 @@ func Pusher(setup Setup, expires, pingFreq time.Duration, contacted func(), logg
 			return err
 		}
 
-		send := func(msg interface{}) error {
+		send := func(r io.ReadCloser) error {
 			w, err := conn.NextWriter(websocket.BinaryMessage)
 			if err != nil {
 				return err
 			}
 
-			// compress data before sending
-			z := zlib.NewWriter(w)
-			if err = json.NewEncoder(z).Encode(msg); err != nil {
-				z.Close()
-				w.Close()
-				return err
+			_, err = io.Copy(w, r)
+
+			if err2 := w.Close(); err == nil {
+				err = err2
 			}
 
-			if err := z.Close(); err != nil {
-				w.Close()
-				return err
-			}
-
-			return w.Close()
+			r.Close()
+			return err
 		}
 
 		go func() {
@@ -155,8 +149,7 @@ func Pusher(setup Setup, expires, pingFreq time.Duration, contacted func(), logg
 				var results Results
 				if err := json.Unmarshal(message, &results); err != nil {
 					logger.Println("status json data:", string(message), "error:", err)
-					teller <- Results{ErrMsg: err.Error()}
-					continue
+					results = Results{ErrMsg: err.Error()}
 				}
 
 				logger.Println("telling teller")
