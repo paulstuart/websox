@@ -171,7 +171,7 @@ func Pusher(setup Setup, expires, pingFreq time.Duration, contacted func(), logg
 
 	loop:
 		for open || active {
-			// logger.Println("ACTIVE:", active, "OPEN:", open)
+			//logger.Println("ACTIVE:", active, "OPEN:", open)
 			select {
 			case <-complete:
 				logger.Println("read complete")
