@@ -105,7 +105,8 @@ func Pusher(setup Setup, expires, pingFreq time.Duration, contacted func(), logg
 			return err
 		}
 
-		send := func(r io.ReadCloser) error {
+		send := func(r io.Reader) error {
+
 			w, err := conn.NextWriter(websocket.BinaryMessage)
 			if err != nil {
 				return err
@@ -117,7 +118,6 @@ func Pusher(setup Setup, expires, pingFreq time.Duration, contacted func(), logg
 				err = err2
 			}
 
-			r.Close()
 			return err
 		}
 
