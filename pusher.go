@@ -42,7 +42,7 @@ func pusherID() string {
 // it should return a nil interface channel and send an error message in the error channel
 //
 // The Results channel is closed by Pusher() when it is done processing (due to session timeout or error)
-type Setup func() (chan io.ReadCloser, chan Results)
+type Setup func() (chan io.Reader, chan Results)
 
 // Pusher gets send/recv channels from the setup function
 // and apply the channel data to a websocket connection

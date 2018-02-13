@@ -15,9 +15,9 @@ func TestExpiresOk(t *testing.T) {
 	expires := time.Duration(time.Second * 1)
 	timeout := expires * 2
 
-	sender := func() (chan io.ReadCloser, chan Results) {
+	sender := func() (chan io.Reader, chan Results) {
 		t.Log("sender started")
-		getter := make(chan io.ReadCloser)
+		getter := make(chan io.Reader)
 		teller := make(chan Results)
 		go func() {
 			t.Log("***** give to getter")
@@ -25,7 +25,7 @@ func TestExpiresOk(t *testing.T) {
 				Msg:   "message for getter",
 				Count: 1,
 				TS:    time.Now(),
-			}.ReadCloser()
+			}.Reader()
 
 			t.Log("***** wait for results")
 			results, ok := <-teller
@@ -56,9 +56,9 @@ func TestExpiresTimeout(t *testing.T) {
 	expires := time.Duration(time.Second * 1)
 	timeout := expires * 2
 
-	sender := func() (chan io.ReadCloser, chan Results) {
+	sender := func() (chan io.Reader, chan Results) {
 		t.Log("sender started")
-		getter := make(chan io.ReadCloser)
+		getter := make(chan io.Reader)
 		teller := make(chan Results)
 		go func() {
 			t.Log("***** give to getter")
@@ -66,7 +66,7 @@ func TestExpiresTimeout(t *testing.T) {
 				Msg:   "message for getter",
 				Count: 1,
 				TS:    time.Now(),
-			}.ReadCloser()
+			}.Reader()
 
 			t.Log("***** wait for results")
 			results, ok := <-teller
@@ -97,9 +97,9 @@ func TestBadClient(t *testing.T) {
 	expires := time.Duration(time.Second * 1)
 	timeout := expires * 2
 
-	sender := func() (chan io.ReadCloser, chan Results) {
+	sender := func() (chan io.Reader, chan Results) {
 		t.Log("sender started")
-		getter := make(chan io.ReadCloser)
+		getter := make(chan io.Reader)
 		teller := make(chan Results)
 		go func() {
 			t.Log("***** give to getter")
@@ -107,7 +107,7 @@ func TestBadClient(t *testing.T) {
 				Msg:   "message for getter",
 				Count: 1,
 				TS:    time.Now(),
-			}.ReadCloser()
+			}.Reader()
 
 			t.Log("***** wait for results")
 			results, ok := <-teller
@@ -147,9 +147,9 @@ func TestBadResponse(t *testing.T) {
 	expires := time.Duration(time.Second * 1)
 	timeout := expires * 2
 
-	sender := func() (chan io.ReadCloser, chan Results) {
+	sender := func() (chan io.Reader, chan Results) {
 		t.Log("sender started")
-		getter := make(chan io.ReadCloser)
+		getter := make(chan io.Reader)
 		teller := make(chan Results)
 		go func() {
 			t.Log("***** give to getter")
@@ -157,7 +157,7 @@ func TestBadResponse(t *testing.T) {
 				Msg:   "message for getter",
 				Count: 1,
 				TS:    time.Now(),
-			}.ReadCloser()
+			}.Reader()
 
 			t.Log("***** wait for results")
 			results, ok := <-teller

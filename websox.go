@@ -11,7 +11,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"time"
 )
@@ -30,17 +29,17 @@ type Stuff struct {
 }
 
 // ReadCloser is a convenience method for generating a ReadCloser representing the struct
-func (s Stuff) ReadCloser() io.ReadCloser {
+func (s Stuff) Reader() io.Reader {
 	var buff bytes.Buffer
 	json.NewEncoder(&buff).Encode(s)
-	return ioutil.NopCloser(&buff)
+	return &buff
 }
 
 // MakeFake returns a sample Actionable function for testing
 func MakeFake(logger *log.Logger) Setup {
-	return func() (chan io.ReadCloser, chan Results) {
+	return func() (chan io.Reader, chan Results) {
 
-		getter := make(chan io.ReadCloser)
+		getter := make(chan io.Reader)
 		teller := make(chan Results)
 
 		go func() {
@@ -53,7 +52,7 @@ func MakeFake(logger *log.Logger) Setup {
 					Count: i,
 					TS:    time.Now(),
 				}
-				getter <- stuff.ReadCloser()
+				getter <- stuff.Reader()
 				results, ok := <-teller
 				if !ok {
 					logger.Println("teller must be closed")
