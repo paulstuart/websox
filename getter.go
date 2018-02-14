@@ -99,7 +99,7 @@ func client(conn *websocket.Conn, fn Actionable, logger *log.Logger) error {
 		var reply interface{}
 		reply, ok, err = fn(r)
 		if err != nil {
-			logger.Println("ok:", ok, "fn err:", err)
+			logger.Println("client function ok:", ok, "err:", err)
 		}
 
 		var errMsg string
@@ -127,7 +127,6 @@ func client(conn *websocket.Conn, fn Actionable, logger *log.Logger) error {
 		if err := conn.WriteMessage(websocket.TextMessage, b); err != nil {
 			return errors.Wrap(err, "status write error")
 		}
-		logger.Println("replied results:", results)
 	}
 	logger.Println("client returning error:", err)
 	return err
