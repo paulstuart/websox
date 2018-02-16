@@ -105,6 +105,7 @@ func Pusher(setup Setup, expires, pingFreq time.Duration, contacted func(), logg
 			return err
 		}
 
+		// copy the message to the websocket connection
 		send := func(r io.Reader) error {
 
 			w, err := conn.NextWriter(websocket.BinaryMessage)
@@ -171,7 +172,6 @@ func Pusher(setup Setup, expires, pingFreq time.Duration, contacted func(), logg
 
 	loop:
 		for open || active {
-			//logger.Println("ACTIVE:", active, "OPEN:", open)
 			select {
 			case <-complete:
 				logger.Println("read complete")
@@ -200,6 +200,7 @@ func Pusher(setup Setup, expires, pingFreq time.Duration, contacted func(), logg
 					teller <- Results{ErrMsg: err.Error()}
 					continue
 				}
+				logger.Println("getter sent stuff")
 				active = true
 			}
 		}
@@ -209,7 +210,7 @@ func Pusher(setup Setup, expires, pingFreq time.Duration, contacted func(), logg
 			logger.Println("websocket server close error:", err)
 		}
 		conn.Close()
-		<-quit
+		//<-quit
 		logger.Println("close teller")
 		close(teller)
 		logger.Println("pusher done")

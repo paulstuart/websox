@@ -340,7 +340,7 @@ func TestBadAction(t *testing.T) {
 
 func TestSingleOk(t *testing.T) {
 
-	const limit = 10
+	const limit = 1
 	counter := 0
 
 	receiver := func(r io.Reader) (interface{}, bool, error) {
@@ -355,12 +355,15 @@ func TestSingleOk(t *testing.T) {
 		teller := make(chan Results)
 		go func() {
 			for i := 0; i < limit; i++ {
+				t.Log("send to getter")
 				getter <- Stuff{
 					Msg:   fmt.Sprintf("msg number: %d", i),
 					Count: i,
 					TS:    time.Now(),
 				}.Reader()
+				t.Log("read from teller")
 				_, ok := <-teller
+				t.Log("teller is ok?", ok)
 				if !ok {
 					break
 				}
