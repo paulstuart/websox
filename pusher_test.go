@@ -12,7 +12,7 @@ import (
 )
 
 func TestExpiresOk(t *testing.T) {
-	expires := time.Duration(time.Second * 1)
+	expires := time.Duration(time.Millisecond * 100)
 	timeout := expires * 2
 
 	sender := func() (chan io.Reader, chan Results) {
@@ -53,7 +53,7 @@ func TestExpiresOk(t *testing.T) {
 }
 
 func TestExpiresTimeout(t *testing.T) {
-	expires := time.Duration(time.Second * 1)
+	expires := time.Duration(time.Millisecond * 100)
 	timeout := expires * 2
 
 	sender := func() (chan io.Reader, chan Results) {
@@ -94,7 +94,7 @@ func TestExpiresTimeout(t *testing.T) {
 }
 
 func TestBadClient(t *testing.T) {
-	expires := time.Duration(time.Second * 1)
+	expires := time.Duration(time.Millisecond * 100)
 	timeout := expires * 2
 
 	sender := func() (chan io.Reader, chan Results) {
@@ -144,7 +144,7 @@ func badClient(url string, logger *log.Logger, wait time.Duration) error {
 }
 
 func TestBadResponse(t *testing.T) {
-	expires := time.Duration(time.Second * 1)
+	expires := time.Duration(time.Millisecond * 100)
 	timeout := expires * 2
 
 	sender := func() (chan io.Reader, chan Results) {

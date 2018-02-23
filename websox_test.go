@@ -392,7 +392,7 @@ func TestSingleOk(t *testing.T) {
 
 // TestTimeout tests handling of a connection close because of session timeout
 func TestTimeout(t *testing.T) {
-	expires := time.Second * 1
+	expires := time.Millisecond * 100
 	sleep := expires * 2
 	ping := time.Second * 3600
 	ts := httptest.NewServer(http.HandlerFunc(Pusher(MakeFake(logger), expires, ping, nil, logger)))
