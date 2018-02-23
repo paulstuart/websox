@@ -22,6 +22,9 @@ import (
 
 const (
 	writeWait = time.Second
+
+	// LogFlags are the default log flags
+	LogFlags = log.Ldate | log.Lmicroseconds | log.Lshortfile
 )
 
 var (
@@ -47,10 +50,9 @@ type Setup func() (chan io.Reader, chan Results)
 // Pusher gets send/recv channels from the setup function
 // and apply the channel data to a websocket connection
 func Pusher(setup Setup, expires, pingFreq time.Duration, contacted func(), logger *log.Logger) http.HandlerFunc {
-	const logFlags = log.Ldate | log.Lmicroseconds | log.Lshortfile
 	return func(w http.ResponseWriter, r *http.Request) {
 		if logger == nil {
-			logger = log.New(os.Stderr, pusherID(), logFlags)
+			logger = log.New(os.Stderr, pusherID(), LogFlags)
 		}
 		getter, teller := setup()
 		if getter == nil {
@@ -73,12 +75,8 @@ func Pusher(setup Setup, expires, pingFreq time.Duration, contacted func(), logg
 			contacted()
 		}
 
-		quit := make(chan struct{})
-		complete := make(chan struct{})
-
 		closeHandler := conn.CloseHandler()
 		conn.SetCloseHandler(func(code int, text string) error {
-			quit <- struct{}{}
 			logger.Printf("got close code: %d text: %s\n", code, text)
 			if closeHandler != nil {
 				logger.Println("calling original closeHandler")
@@ -87,12 +85,12 @@ func Pusher(setup Setup, expires, pingFreq time.Duration, contacted func(), logg
 			return nil
 		})
 
-		conn.SetPongHandler(func(s string) error {
-			if contacted != nil {
+		if contacted != nil {
+			conn.SetPongHandler(func(s string) error {
 				contacted()
-			}
-			return nil
-		})
+				return nil
+			})
+		}
 
 		ticker := time.NewTicker(pingFreq)
 		ping := func(now time.Time) error {
@@ -122,10 +120,12 @@ func Pusher(setup Setup, expires, pingFreq time.Duration, contacted func(), logg
 			return err
 		}
 
+		// listen for messages from client
+		response := make(chan io.Reader)
 		go func() {
 			for {
 				logger.Println("waiting for reply")
-				messageType, message, err := conn.ReadMessage()
+				messageType, r, err := conn.NextReader()
 				if err != nil {
 					logger.Println("pusher read error:", err)
 					break
@@ -136,31 +136,16 @@ func Pusher(setup Setup, expires, pingFreq time.Duration, contacted func(), logg
 				}
 
 				switch messageType {
+				case websocket.TextMessage:
+					response <- r
 				case websocket.CloseMessage:
 					logger.Println("uhoh! closing time!")
 					break
-				case websocket.PingMessage:
-					logger.Println("PING!")
-					continue
-				case websocket.PongMessage:
-					logger.Println("PONG!")
-					continue
 				}
 
-				var results Results
-				if err := json.Unmarshal(message, &results); err != nil {
-					logger.Println("status json data:", string(message), "error:", err)
-					results = Results{ErrMsg: err.Error()}
-				}
-
-				logger.Println("telling teller")
-				teller <- results
-				logger.Println("told teller")
-				complete <- struct{}{}
 			}
 			logger.Println("====> read loop complete")
-			quit <- struct{}{}
-			logger.Println("====> exiting read loop")
+			close(response)
 		}()
 
 		expired := make(<-chan time.Time)
@@ -173,46 +158,50 @@ func Pusher(setup Setup, expires, pingFreq time.Duration, contacted func(), logg
 	loop:
 		for open || active {
 			select {
-			case <-complete:
-				logger.Println("read complete")
-				active = false
 			case <-expired:
 				logger.Println("session has expired")
 				open = false
 				getter = nil // don't take anymore requests
-			case <-quit:
-				logger.Println("it's quitting time")
-				break loop
 			case now := <-ticker.C:
 				if err := ping(now); err != nil {
 					logger.Println("ping error:", err)
 					break loop
 				}
-			case stuff, ok := <-getter:
-				logger.Println("getter got stuff")
+			case r, ok := <-getter:
+				logger.Println("getter got")
 				if !ok {
 					logger.Println("getter is closed")
 					break loop
 				}
 				logger.Println("getter sending stuff")
-				if err := send(stuff); err != nil {
+				if err := send(r); err != nil {
 					logger.Println("getter error sending stuff:", err)
 					teller <- Results{ErrMsg: err.Error()}
 					continue
 				}
 				logger.Println("getter sent stuff")
 				active = true
+			case r, ok := <-response:
+				if !ok {
+					break loop
+				}
+				var results Results
+				if err := json.NewDecoder(r).Decode(&results); err != nil {
+					logger.Println("status json error:", err)
+					results = Results{ErrMsg: err.Error()}
+				}
+				teller <- results
+				active = false
+				logger.Println("read complete")
 			}
 		}
 		logger.Println("websocket server closing")
-		err = conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
-		if err != nil {
-			logger.Println("websocket server close error:", err)
+		msg := websocket.FormatCloseMessage(websocket.CloseNormalClosure, "")
+		if err := conn.WriteMessage(websocket.CloseMessage, msg); err != nil {
+			logger.Println("websocket server close message error:", err)
 		}
 		conn.Close()
-		//<-quit
-		logger.Println("close teller")
 		close(teller)
-		logger.Println("pusher done")
+		logger.Println("exit pusher ")
 	}
 }
