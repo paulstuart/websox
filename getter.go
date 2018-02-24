@@ -24,8 +24,6 @@ import (
 // and an error if such is encountered
 type Actionable func(io.Reader) (interface{}, bool, error)
 
-const logFlags = log.Ldate | log.Lmicroseconds | log.Lshortfile
-
 // Client connects to url and applies the Actionable function to each message received
 // url specifices the websocket endpoint to connect to
 // pings will log websocket pings if set true
@@ -33,9 +31,9 @@ const logFlags = log.Ldate | log.Lmicroseconds | log.Lshortfile
 // logger logs actions
 func Client(url string, fn Actionable, pings bool, headers http.Header, logger *log.Logger) error {
 	if logger == nil {
-		logger = log.New(os.Stderr, "client ", logFlags)
+		logger = log.New(os.Stderr, "client ", LogFlags)
 	}
-	conn, err := dial(url, headers, logger, nil)
+	conn, err := dial(url, headers, logger)
 	if err != nil {
 		return err
 	}
@@ -58,7 +56,8 @@ func client(conn *websocket.Conn, fn Actionable, logger *log.Logger) error {
 		// To cleanly close a connection, a client should send a close
 		// frame and wait for the server to close the connection.
 		logger.Println("cleaning up and closing")
-		err := conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
+		msg := websocket.FormatCloseMessage(websocket.CloseNormalClosure, "")
+		err := conn.WriteMessage(websocket.CloseMessage, msg)
 		if err != nil && websocket.IsUnexpectedCloseError(err, 1000) {
 			logger.Println("websocket CloseMessage error:", err)
 		}
@@ -102,13 +101,11 @@ func client(conn *websocket.Conn, fn Actionable, logger *log.Logger) error {
 			logger.Println("client function ok:", ok, "err:", err)
 		}
 
-		var errMsg string
+		var results Results
 		if err != nil {
-			errMsg = err.Error()
+			results.ErrMsg = err.Error()
 		}
-		results := Results{
-			ErrMsg: errMsg,
-		}
+
 		if reply != nil {
 			b, err := json.Marshal(reply)
 			if err != nil {
@@ -119,23 +116,20 @@ func client(conn *websocket.Conn, fn Actionable, logger *log.Logger) error {
 			results.Payload = &raw
 		}
 
-		b, jerr := json.Marshal(results)
-		if jerr != nil {
-			logger.Println("results status json error:", jerr)
-		}
-
-		if err := conn.WriteMessage(websocket.TextMessage, b); err != nil {
+		if err := conn.WriteJSON(results); err != nil {
+			logger.Println("results status json error:", err)
 			return errors.Wrap(err, "status write error")
 		}
+
 	}
 	logger.Println("client returning error:", err)
 	return err
 }
 
 // dial connects to url and return a websocket connection if successful
-func dial(url string, headers http.Header, logger *log.Logger, closeHandler func(code int, text string) error) (*websocket.Conn, error) {
+func dial(url string, headers http.Header, logger *log.Logger) (*websocket.Conn, error) {
 	if logger == nil {
-		logger = log.New(os.Stderr, "client ", logFlags)
+		logger = log.New(os.Stderr, "client ", LogFlags)
 	}
 	if strings.HasPrefix(url, "http") {
 		url = "ws" + url[4:]
@@ -152,22 +146,6 @@ func dial(url string, headers http.Header, logger *log.Logger, closeHandler func
 		return nil, errors.Wrap(err, "websocket dial error for url: "+url)
 	}
 
-	if closeHandler != nil {
-		oldHandler := conn.CloseHandler()
-		conn.SetCloseHandler(func(code int, text string) error {
-			logger.Printf("got close code: %d text: %s\n", code, text)
-			if oldHandler != nil {
-				logger.Println("calling original closeHandler")
-				err := oldHandler(code, text)
-				if err != nil && websocket.IsUnexpectedCloseError(err, 1000) {
-					logger.Println(" closeHandler error:", err)
-					return err
-				}
-				return err
-			}
-			return nil
-		})
-	}
 	logger.Println("connected")
 
 	return conn, nil
