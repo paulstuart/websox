@@ -22,9 +22,6 @@ import (
 
 const (
 	writeWait = time.Second
-
-	// LogFlags are the default log flags
-	LogFlags = log.Ldate | log.Lmicroseconds | log.Lshortfile
 )
 
 var (
@@ -57,10 +54,11 @@ func Pusher(setup Setup, expires, pingFreq time.Duration, contacted func(), logg
 			logger = log.New(os.Stderr, pusherID(), LogFlags)
 		}
 
-		// getter gets data to be sent
+		// getter gets data to be sent,
 		// teller returns results of what was sent
 		getter, teller := setup()
 		if getter == nil {
+			logger.Println("aborted results")
 			results := <-teller
 			logger.Println("closing teller - app startup failure")
 			close(teller)
@@ -85,16 +83,8 @@ func Pusher(setup Setup, expires, pingFreq time.Duration, contacted func(), logg
 			})
 		}
 
-		//response := make(chan io.Reader)
-		//src := make(chan io.Reader)
-		//src, response := eventloop(getter, teller, expires, logger)
-
 		// listen for messages from client
 		listener(conn, getter, teller, pingFreq, expires, contacted, logger)
-		//listener(conn, logger, src, response, pingFreq, contacted)
-
-		// event loop for all other i/o
-		//ioloop(conn, getter, teller, response, expires, pingFreq, logger)
 	}
 }
 
