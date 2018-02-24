@@ -20,7 +20,7 @@ var (
 	testExpires = time.Second * 86400
 	testPing    = time.Second * 3600
 	testTimeout = time.Second * 1
-	logger      = log.New(ioutil.Discard, "", logFlags)
+	logger      = log.New(ioutil.Discard, "", LogFlags)
 )
 
 func testingSetup() {
@@ -71,7 +71,7 @@ func TestTenSend(t *testing.T) {
 					Msg:   fmt.Sprintf("msg number: %d", i),
 					Count: i,
 					TS:    time.Now(),
-				}.Reader()
+				}.NewReader()
 				results, ok := <-teller
 				if !ok {
 					t.Fatal("teller must be closed")
@@ -136,7 +136,7 @@ func sendX(t *testing.T, limit int) Setup {
 					Msg:   fmt.Sprintf("msg number: %d", i),
 					Count: i,
 					TS:    time.Now(),
-				}.Reader()
+				}.NewReader()
 				t.Log("***** sendX wait for results")
 				results, ok := <-teller
 				t.Log("***** sendX results:", results, "OK:", ok)
@@ -169,7 +169,7 @@ func sendFail(t *testing.T) Setup {
 				Msg:   fmt.Sprintf("msg number: %d", 1),
 				Count: 1,
 				TS:    time.Now(),
-			}.Reader()
+			}.NewReader()
 			t.Log("sent Stuff")
 			results, ok := <-teller
 			t.Log("sent results:", results)
@@ -256,7 +256,7 @@ func TestNoAnswer(t *testing.T) {
 				Msg:   fmt.Sprintf("msg number: %d", 1),
 				Count: 1,
 				TS:    time.Now(),
-			}.Reader()
+			}.NewReader()
 			t.Log("***** noAnswer wait for results")
 			results, ok := <-teller
 			t.Log("***** noAnswer TELLER results:", results, "OK:", ok)
@@ -316,7 +316,7 @@ func TestBadAction(t *testing.T) {
 				Msg:   fmt.Sprintf("msg number: %d", 1),
 				Count: 1,
 				TS:    time.Now(),
-			}.Reader()
+			}.NewReader()
 			t.Log("***** **BadAction** wait for results")
 			results, ok := <-teller
 			t.Log("***** **BadAction** TELLER results:", results, "OK:", ok)
@@ -360,7 +360,7 @@ func TestSingleOk(t *testing.T) {
 					Msg:   fmt.Sprintf("msg number: %d", i),
 					Count: i,
 					TS:    time.Now(),
-				}.Reader()
+				}.NewReader()
 				t.Log("read from teller")
 				_, ok := <-teller
 				t.Log("teller is ok?", ok)
