@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/pkg/errors"
 )
 
 func TestExpiresOk(t *testing.T) {
@@ -25,7 +26,7 @@ func TestExpiresOk(t *testing.T) {
 				Msg:   "message for getter",
 				Count: 1,
 				TS:    time.Now(),
-			}.Reader()
+			}.NewReader()
 
 			t.Log("***** wait for results")
 			results, ok := <-teller
@@ -44,7 +45,10 @@ func TestExpiresOk(t *testing.T) {
 
 		return getter, teller
 	}
-	ts := httptest.NewServer(http.HandlerFunc(Pusher(sender, expires, testPing, nil, logger)))
+	contacted := func() {
+		t.Log("contacted!")
+	}
+	ts := httptest.NewServer(http.HandlerFunc(Pusher(sender, expires, testPing, contacted, logger)))
 	defer ts.Close()
 
 	if err := Client(ts.URL, sleeper(logger, timeout), true, nil, logger); err != nil {
@@ -66,7 +70,7 @@ func TestExpiresTimeout(t *testing.T) {
 				Msg:   "message for getter",
 				Count: 1,
 				TS:    time.Now(),
-			}.Reader()
+			}.NewReader()
 
 			t.Log("***** wait for results")
 			results, ok := <-teller
@@ -107,7 +111,7 @@ func TestBadClient(t *testing.T) {
 				Msg:   "message for getter",
 				Count: 1,
 				TS:    time.Now(),
-			}.Reader()
+			}.NewReader()
 
 			t.Log("***** wait for results")
 			results, ok := <-teller
@@ -135,7 +139,7 @@ func TestBadClient(t *testing.T) {
 }
 
 func badClient(url string, logger *log.Logger, wait time.Duration) error {
-	conn, err := dial(url, nil, logger, nil)
+	conn, err := dial(url, nil, logger)
 	if err != nil {
 		return err
 	}
@@ -157,7 +161,7 @@ func TestBadResponse(t *testing.T) {
 				Msg:   "message for getter",
 				Count: 1,
 				TS:    time.Now(),
-			}.Reader()
+			}.NewReader()
 
 			t.Log("***** wait for results")
 			results, ok := <-teller
@@ -185,7 +189,7 @@ func TestBadResponse(t *testing.T) {
 }
 
 func clientEmptyResponse(url string, logger *log.Logger, wait time.Duration) error {
-	conn, err := dial(url, nil, logger, nil)
+	conn, err := dial(url, nil, logger)
 	if err != nil {
 		return err
 	}
@@ -200,4 +204,57 @@ func clientEmptyResponse(url string, logger *log.Logger, wait time.Duration) err
 		return err
 	}
 	return conn.Close()
+}
+
+func abortedClient(url string, logger *log.Logger, wait time.Duration) error {
+	conn, err := dial(url, nil, logger)
+	if err != nil {
+		return err
+	}
+	time.Sleep(wait)
+	return conn.Close()
+}
+
+func TestAbortedClient(t *testing.T) {
+	expires := time.Duration(time.Millisecond * 100)
+	timeout := expires * 2
+
+	sender := func() (chan io.Reader, chan Results) {
+		t.Log("sender started")
+		c := make(chan Results, 1)
+		c <- Results{ErrMsg: "aborted Connection"}
+		return nil, c
+	}
+
+	ts := httptest.NewServer(http.HandlerFunc(Pusher(sender, expires, testPing, nil, logger)))
+	defer ts.Close()
+
+	if err := abortedClient(ts.URL, logger, timeout); err != nil {
+		t.Logf("expected error (%T):%s", err, errors.Cause(err))
+	} else {
+		t.Fatal("missing expected error")
+	}
+}
+
+func TestPingOk(t *testing.T) {
+	expires := time.Duration(time.Millisecond * 100)
+	ping := expires / 2
+	timeout := expires / 2
+
+	sender := func() (chan io.Reader, chan Results) {
+		t.Log("sender started")
+		getter := make(chan io.Reader)
+		teller := make(chan Results)
+
+		return getter, teller
+	}
+	contacted := func() {
+		t.Log("contacted!")
+	}
+	ts := httptest.NewServer(http.HandlerFunc(Pusher(sender, expires, ping, contacted, logger)))
+	defer ts.Close()
+
+	if err := Client(ts.URL, sleeper(logger, timeout), true, nil, logger); err != nil {
+		t.Fatal("unexpected error:", err)
+	}
 }
