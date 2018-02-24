@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/pkg/errors"
 )
 
 var (
@@ -424,4 +425,18 @@ func TestMain(m *testing.M) {
 	retCode := m.Run()
 	//testingTeardown()
 	os.Exit(retCode)
+}
+
+// TestPusher just does a simple send
+func TestClientBadDial(t *testing.T) {
+	expires := time.Second * 86400
+	ping := time.Second * 3600
+	ts := httptest.NewServer(http.HandlerFunc(Pusher(MakeFake(logger), expires, ping, nil, nil)))
+	defer ts.Close()
+
+	if err := Client("http://127.0.0.2/bad/path", gotIt, true, nil, logger); err != nil {
+		t.Logf("got expected error (%T): %v", errors.Cause(err), err)
+	} else {
+		t.Fatal("expected dial error")
+	}
 }
