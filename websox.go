@@ -15,6 +15,11 @@ import (
 	"time"
 )
 
+const (
+	// LogFlags are the default log flags
+	LogFlags = log.Ldate | log.Lmicroseconds | log.Lshortfile
+)
+
 // Results is used to return client results / errors on websocket pushes
 type Results struct {
 	ErrMsg  string           `json:"error"`
@@ -28,8 +33,8 @@ type Stuff struct {
 	TS    time.Time `json:"timestamp"`
 }
 
-// ReadCloser is a convenience method for generating a ReadCloser representing the struct
-func (s Stuff) Reader() io.Reader {
+// NewReader is a convenience method for generating a io.Reader representing the struct
+func (s Stuff) NewReader() io.Reader {
 	var buff bytes.Buffer
 	json.NewEncoder(&buff).Encode(s)
 	return &buff
@@ -52,7 +57,7 @@ func MakeFake(logger *log.Logger) Setup {
 					Count: i,
 					TS:    time.Now(),
 				}
-				getter <- stuff.Reader()
+				getter <- stuff.NewReader()
 				results, ok := <-teller
 				if !ok {
 					logger.Println("teller must be closed")

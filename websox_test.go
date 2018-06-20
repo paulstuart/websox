@@ -14,13 +14,14 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/pkg/errors"
 )
 
 var (
 	testExpires = time.Second * 86400
 	testPing    = time.Second * 3600
 	testTimeout = time.Second * 1
-	logger      = log.New(ioutil.Discard, "", logFlags)
+	logger      = log.New(ioutil.Discard, "", LogFlags)
 )
 
 func testingSetup() {
@@ -71,7 +72,7 @@ func TestTenSend(t *testing.T) {
 					Msg:   fmt.Sprintf("msg number: %d", i),
 					Count: i,
 					TS:    time.Now(),
-				}.Reader()
+				}.NewReader()
 				results, ok := <-teller
 				if !ok {
 					t.Fatal("teller must be closed")
@@ -136,7 +137,7 @@ func sendX(t *testing.T, limit int) Setup {
 					Msg:   fmt.Sprintf("msg number: %d", i),
 					Count: i,
 					TS:    time.Now(),
-				}.Reader()
+				}.NewReader()
 				t.Log("***** sendX wait for results")
 				results, ok := <-teller
 				t.Log("***** sendX results:", results, "OK:", ok)
@@ -169,7 +170,7 @@ func sendFail(t *testing.T) Setup {
 				Msg:   fmt.Sprintf("msg number: %d", 1),
 				Count: 1,
 				TS:    time.Now(),
-			}.Reader()
+			}.NewReader()
 			t.Log("sent Stuff")
 			results, ok := <-teller
 			t.Log("sent results:", results)
@@ -256,7 +257,7 @@ func TestNoAnswer(t *testing.T) {
 				Msg:   fmt.Sprintf("msg number: %d", 1),
 				Count: 1,
 				TS:    time.Now(),
-			}.Reader()
+			}.NewReader()
 			t.Log("***** noAnswer wait for results")
 			results, ok := <-teller
 			t.Log("***** noAnswer TELLER results:", results, "OK:", ok)
@@ -316,7 +317,7 @@ func TestBadAction(t *testing.T) {
 				Msg:   fmt.Sprintf("msg number: %d", 1),
 				Count: 1,
 				TS:    time.Now(),
-			}.Reader()
+			}.NewReader()
 			t.Log("***** **BadAction** wait for results")
 			results, ok := <-teller
 			t.Log("***** **BadAction** TELLER results:", results, "OK:", ok)
@@ -360,7 +361,7 @@ func TestSingleOk(t *testing.T) {
 					Msg:   fmt.Sprintf("msg number: %d", i),
 					Count: i,
 					TS:    time.Now(),
-				}.Reader()
+				}.NewReader()
 				t.Log("read from teller")
 				_, ok := <-teller
 				t.Log("teller is ok?", ok)
@@ -392,7 +393,7 @@ func TestSingleOk(t *testing.T) {
 
 // TestTimeout tests handling of a connection close because of session timeout
 func TestTimeout(t *testing.T) {
-	expires := time.Second * 1
+	expires := time.Millisecond * 100
 	sleep := expires * 2
 	ping := time.Second * 3600
 	ts := httptest.NewServer(http.HandlerFunc(Pusher(MakeFake(logger), expires, ping, nil, logger)))
@@ -424,4 +425,18 @@ func TestMain(m *testing.M) {
 	retCode := m.Run()
 	//testingTeardown()
 	os.Exit(retCode)
+}
+
+// TestPusher just does a simple send
+func TestClientBadDial(t *testing.T) {
+	expires := time.Second * 86400
+	ping := time.Second * 3600
+	ts := httptest.NewServer(http.HandlerFunc(Pusher(MakeFake(logger), expires, ping, nil, nil)))
+	defer ts.Close()
+
+	if err := Client("http://127.0.0.2/bad/path", gotIt, true, nil, logger); err != nil {
+		t.Logf("got expected error (%T): %v", errors.Cause(err), err)
+	} else {
+		t.Fatal("expected dial error")
+	}
 }
